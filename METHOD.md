@@ -1,6 +1,6 @@
 # Niittoraportti – menetelmäkuvaus
 
-Versio 2.0.0 · 1.11.2026 · koodi: [`core.js`](core.js) · testit: [`test/core.test.js`](test/core.test.js)
+Versio 2.0.0 · 1.11.2026 · koodi: [`core.js`](core.js), [`datahaku.js`](datahaku.js) · testit: [`test/`](test/)
 
 ## Tarkoitus
 
@@ -30,7 +30,25 @@ Käyttäjä syöttää yhden rivin havaintoa kohden.
 | Kelvolliset % | pilvettömien pikselien osuus (HLS: Fmask, PlanetScope: UDM2 clear) | – |
 | Muuttunut % | pikselien osuus, joissa NDVI laski ≥ kynnyksen edellisestä havainnosta | – |
 
-Pikselitason laskenta (NDVI, maskit, osuudet) tehdään ennen työkalua, esimerkiksi hakuohjeiden skripteillä. Lohko kutistetaan ennen laskentaa reunapuskurin verran (oletus 10 m), koska kutistettu lohko parantaa tunnistusta [L4] ja Sen4CAP käyttää vain kokonaan lohkon sisällä olevia pikseleitä [L2].
+Havainnot voi syöttää käsin, tuoda CSV:nä tai hakea työkalun datahaulla (ks. alla). Lohko kutistetaan ennen laskentaa reunapuskurin verran (oletus 10 m), koska kutistettu lohko parantaa tunnistusta [L4] ja Sen4CAP käyttää vain kokonaan lohkon sisällä olevia pikseleitä [L2].
+
+## Datahaku
+
+Pikselitason laskennan tekevät selaimessa [`datahaku.js`](datahaku.js) ja komentorivillä [`scripts/hae_havainnot.py`](scripts/hae_havainnot.py). Molemmat laskevat saman tuloksen, ja testit varmistavat sen samoilla synteettisillä kuvilla.
+
+| Vaihe | HLS v2.0 (S30, L30) | PlanetScope |
+| --- | --- | --- |
+| Lähde | Microsoft Planetary Computer (`hls2-s30`, `hls2-l30`), ei tunnusta. Skriptissä vaihtoehtona NASA LP DAAC (`HLSS30_2.0`, `HLSL30_2.0`) Earthdata-tokenilla. | Planet Data API (`PSScene`, `ortho_analytic_4b_sr`), tilaus Orders API:lla: `analytic_sr_udm2`, työkalut `clip` (lohko) ja `harmonize` (Sentinel-2) |
+| Kuvavalinta | kuvan pilvisyys ≤ raja (oletus 80 %) | päivää kohden suurin `clear_percent` |
+| Lohkon pikselit | pikselin keskipiste lohkon sisällä ja vähintään reunapuskurin päässä reunasta | sama |
+| Kelvollinen pikseli | Fmask: ei sirrusta, pilveä, pilven viereistä, varjoa eikä lunta (bitit 0–4), aerosoli ei korkea (bitit 6–7 ≠ 11); punainen ja NIR > 0 | UDM2 clear = 1; punainen ja NIR > 0 |
+| NDVI | S30 (B8A − B04)/(B8A + B04), L30 (B05 − B04)/(B05 + B04) | (NIR − R)/(NIR + R), kaistat 4 ja 3 |
+| Arvo | kelvollisten pikselien NDVI-mediaani | sama |
+| Kelvolliset % | kelvolliset / lohkon pikselit | sama |
+| Muuttunut % | osuus kelvollisista pikseleistä, joissa NDVI laski ≥ kynnyksen (oletus 0,12) verrattuna edelliseen saman perheen havaintoon, jossa kelvollisia oli ≥ raja (oletus 50 %). Vertailu tehdään pikselin keskipisteen kohdalta edellisen kuvan ruudukossa, tarvittaessa koordinaatistomuunnoksen kautta. Arvo jätetään tyhjäksi, jos verrattavia pikseleitä on alle puolet. | sama |
+| Saman päivän kuvat | pidetään kuva, jossa on eniten kelvollisia pikseleitä | sama |
+
+Datahaussa lohkon rajaus lähetetään hakupalveluun. Planet-API-avain on vain selaimen muistissa (valinnaisesti välilehden istuntomuistissa), eikä sitä tallenneta raporttiin. Jos Planet ei salli kutsua selaimesta (CORS), käytetään skriptiä.
 
 ## Algoritmi
 
@@ -83,6 +101,8 @@ Joka toisen vuoden vaatimusta ja kasvuston säilyttämisajan päivämääriä ei
 - Sade alentaa koherenssia ja voi peittää niiton [L5].
 - Laidunnus ja niitto erottuvat huonosti.
 - Työkalu luottaa käyttäjän syöttämiin NDVI- ja osuuslukuihin. Toistettavuus perustuu siihen, että tunnisteet ja parametrit raportoidaan.
+- Datahaku on testattu synteettisillä kuvilla ja mockatuilla rajapinnoilla, ei vielä oikeita palveluita vasten. Ensimmäiset oikeat haut kannattaa tarkistaa käsin, esimerkiksi vertaamalla yhden kuvan NDVI-mediaania QGIS:ssä laskettuun.
+- Planetary Computerin HLS-kopio voi olla NASAn alkuperäistä jäljessä. Tuoreimmat kuvat saa tarvittaessa skriptillä NASAlta (`--hls-lahde nasa`).
 
 ## Yksikkötestit
 
@@ -99,6 +119,13 @@ Joka toisen vuoden vaatimusta ja kasvuston säilyttämisajan päivämääriä ei
 - kaksi niittoa ≥ 28 vrk välein
 - raporttitekstin muotoilu
 - tukihavaintojen huomautukset vahvassa tapahtumassa
+
+Datahaun testit (`npm install` kerran):
+
+- `node test/datahaku.test.js`: projektio (verrattu pyprojiin), lohkon luku, Fmask, reunapuskuri, HLS- ja PlanetScope-ketju mockatuilla rajapinnoilla
+- `python test/test_hae_havainnot.py`: skriptin laskenta samoilla kuvilla; tulosten on oltava samat kuin selaimessa
+- `node test/selain.test.js`: käyttöliittymä Chromiumissa (vaatii Playwrightin)
+- Testikuvat tuotetaan skriptillä `test/fixtures/make_fixtures.py`.
 
 ## Lähteet
 

@@ -1,0 +1,446 @@
+"""
+Hakee lohkon HLS- ja PlanetScope-havainnot ja kirjoittaa ne Niittoraportin CSV-tuontimuotoon
+(päivä; lähde; tunniste; NDVI-mediaani; kelvolliset %; muuttunut %).
+
+Laskenta on sama kuin selainsovelluksessa (datahaku.js):
+  - pikseli kuuluu lohkoon, jos sen keskipiste on vähintään reunapuskurin päässä reunasta
+  - HLS: Fmask hylkää sirruksen, pilven, pilven viereiset pikselit, varjon, lumen ja korkean aerosolin
+  - PlanetScope: UDM2 clear -kaista, 4-kaistainen SR harmonisoituna Sentinel-2:een, lohkoon rajattuna
+  - muuttunut % = osuus pikseleistä, joissa NDVI laski ≥ kynnys edellisestä saman sensoriperheen
+    havainnosta, jossa kelvollisia pikseleitä oli vähintään raja-arvon verran
+
+Asennus:
+    pip install requests rasterio numpy pyproj shapely
+
+Esimerkkejä:
+    # HLS Planetary Computerista (ei tunnusta)
+    python hae_havainnot.py --lohko lohko.geojson --alku 2026-05-01 --loppu 2026-09-30
+
+    # HLS suoraan NASAlta (Earthdata-token, ks. README)
+    export EARTHDATA_TOKEN=...
+    python hae_havainnot.py --lohko lohko.geojson --alku 2026-05-01 --loppu 2026-09-30 --hls-lahde nasa
+
+    # Lisäksi PlanetScope (Planet-API-avain); tilaus kuluttaa kiintiötä ja kysyy vahvistuksen
+    export PL_API_KEY=...
+    python hae_havainnot.py --lohko lohko.geojson --alku 2026-05-01 --loppu 2026-09-30 --planet
+
+    # Jatka aiemmin tehtyä Planet-tilausta
+    python hae_havainnot.py --lohko lohko.geojson --planet-tilaus <tilauksen-id> --hls-lahde ei
+
+Lohko: GeoJSON (Feature, FeatureCollection tai geometria) WGS84- tai ETRS-TM35FIN-koordinaateissa.
+"""
+import argparse
+import datetime as dt
+import json
+import os
+import pathlib
+import sys
+import tempfile
+import time
+from concurrent.futures import ThreadPoolExecutor
+
+import numpy as np
+import requests
+
+PC_STAC = "https://planetarycomputer.microsoft.com/api/stac/v1"
+PC_SAS = "https://planetarycomputer.microsoft.com/api/sas/v1/token"
+NASA_STAC = "https://cmr.earthdata.nasa.gov/stac/LPCLOUD"
+PL_DATA = "https://api.planet.com/data/v1"
+PL_ORDERS = "https://api.planet.com/compute/ops/orders/v2"
+
+HLS = {
+    "pc": {"hls2-s30": ("B04", "B8A", "HLS-S30"), "hls2-l30": ("B04", "B05", "HLS-L30")},
+    "nasa": {"HLSS30_2.0": ("B04", "B8A", "HLS-S30"), "HLSL30_2.0": ("B04", "B05", "HLS-L30")},
+}
+
+# ---------------------------------------------------------------- lohko
+
+
+def lue_lohko(polku):
+    from pyproj import Transformer
+    from shapely.geometry import shape
+    from shapely.ops import transform, unary_union
+
+    g = json.load(open(polku, encoding="utf-8"))
+    feats = g["features"] if g.get("type") == "FeatureCollection" else [g]
+    geoms = [shape(f["geometry"] if f.get("type") == "Feature" else f) for f in feats]
+    geom = unary_union([x for x in geoms if x.geom_type in ("Polygon", "MultiPolygon")])
+    if geom.is_empty:
+        sys.exit("Lohkon GeoJSONista ei löytynyt monikulmiota.")
+    crs = (g.get("crs") or {}).get("properties", {}).get("name", "")
+    if "3067" in crs or (not crs and abs(geom.bounds[0]) > 180):
+        epsg = 3067
+    elif crs and "4326" not in crs and "CRS84" not in crs and "4258" not in crs:
+        epsg = int(crs.split(":")[-1])
+    else:
+        epsg = 4326
+    wgs = geom if epsg == 4326 else transform(Transformer.from_crs(epsg, 4326, always_xy=True).transform, geom)
+    tm = transform(Transformer.from_crs(4326, 3067, always_xy=True).transform, wgs)
+    props = feats[0].get("properties") or {} if feats and feats[0].get("type") == "Feature" else {}
+    return {"wgs": wgs, "geojson": json.loads(json.dumps(wgs.__geo_interface__)), "ala_m2": tm.area, "properties": props}
+
+
+# ---------------------------------------------------------------- rasterilaskenta
+
+
+def fmask_kelpaa(fm):
+    fm = fm.astype(np.uint16)
+    return ((fm & 0x1F) == 0) & (((fm >> 6) & 3) != 3)
+
+
+def ikkuna(ds, lohko, puskuri):
+    """Lohkon ikkuna ja maski rasterin ruudukossa (keskipiste ≥ puskuri reunasta)."""
+    from pyproj import Transformer
+    from rasterio import features, windows
+    from shapely.ops import transform
+
+    g = transform(Transformer.from_crs(4326, ds.crs, always_xy=True).transform, lohko["wgs"])
+    sis = g.buffer(-puskuri) if puskuri else g
+    minx, miny, maxx, maxy = g.bounds
+    t = ds.transform  # pohjoinen ylös: t.e < 0
+    c0 = max(0, int(np.floor((minx - t.c) / t.a)))
+    c1 = min(ds.width, int(np.ceil((maxx - t.c) / t.a)))
+    r0 = max(0, int(np.floor((maxy - t.f) / t.e)))
+    r1 = min(ds.height, int(np.ceil((miny - t.f) / t.e)))
+    if c1 <= c0 or r1 <= r0 or sis.is_empty:
+        return None
+    w = windows.Window(c0, r0, c1 - c0, r1 - r0)
+    tr = ds.window_transform(w)
+    maski = features.geometry_mask([sis], out_shape=(int(w.height), int(w.width)), transform=tr, invert=True)
+    return {"w": w, "tr": tr, "crs": ds.crs, "maski": maski, "n": int(maski.sum())}
+
+
+def tilastot(ndvi, iw, edel, pudotus):
+    from pyproj import Transformer
+
+    kelv = ~np.isnan(ndvi) & iw["maski"]
+    arvot = ndvi[kelv]
+    vert = muutt = 0
+    if edel is not None and arvot.size:
+        rr, cc = np.nonzero(kelv)
+        xs, ys = iw["tr"] * (cc + 0.5, rr + 0.5)
+        if edel["iw"]["crs"] != iw["crs"]:
+            xs, ys = Transformer.from_crs(iw["crs"], edel["iw"]["crs"], always_xy=True).transform(xs, ys)
+        pc, pr = ~edel["iw"]["tr"] * (np.asarray(xs), np.asarray(ys))
+        pc, pr = np.floor(pc).astype(int), np.floor(pr).astype(int)
+        h, w = edel["ndvi"].shape
+        ok = (pc >= 0) & (pr >= 0) & (pc < w) & (pr < h)
+        pv = np.full(arvot.shape, np.nan)
+        pv[ok] = edel["ndvi"][pr[ok], pc[ok]]
+        on = ~np.isnan(pv)
+        vert = int(on.sum())
+        muutt = int(((pv[on] - arvot[on]) >= pudotus - 1e-9).sum())
+    return {
+        "arvo": round(float(np.median(arvot)), 3) if arvot.size else None,
+        "kelvolliset": round(arvot.size / iw["n"] * 100) if iw["n"] else 0,
+        "muuttunut": round(muutt / vert * 100) if vert >= max(3, arvot.size * 0.5) else None,
+        "n": int(arvot.size),
+    }
+
+
+def viimeistele(raaka, a):
+    paras = {}
+    for o in raaka:
+        if o and o["arvo"] is not None:
+            k = (o["perhe"], o["pvm"])
+            if k not in paras or o["n"] > paras[k]["n"]:
+                paras[k] = o
+    edel, ulos = {}, []
+    for o in sorted(paras.values(), key=lambda x: x["pvm"]):
+        s = tilastot(o["ndvi"], o["iw"], edel.get(o["perhe"]), a.pudotus)
+        if s["kelvolliset"] >= a.kelvolliset:
+            edel[o["perhe"]] = o
+        if s["arvo"] is not None:
+            ulos.append({"pvm": o["pvm"], "lahde": o["lahde"], "id": o["id"], **s})
+    return ulos
+
+
+def ndvi(red, nir, ehto):
+    red, nir = red.astype("float64"), nir.astype("float64")
+    ok = ehto & (red > 0) & (nir > 0)
+    out = np.full(red.shape, np.nan)
+    out[ok] = (nir[ok] - red[ok]) / (nir[ok] + red[ok])
+    return out
+
+
+# ---------------------------------------------------------------- HLS
+
+
+def hls_kuva(lahde, pvm, kuvaid, urls, lohko, a, gdal_env=None):
+    """urls = (punainen, nir, Fmask) – polut tai osoitteet."""
+    import rasterio
+
+    with rasterio.Env(**(gdal_env or {})):
+        with rasterio.open(urls[0]) as r0:
+            iw = ikkuna(r0, lohko, a.puskuri)
+            if not iw or not iw["n"]:
+                return None
+            red = r0.read(1, window=iw["w"])
+        with rasterio.open(urls[1]) as r1:
+            nir = r1.read(1, window=iw["w"])
+        with rasterio.open(urls[2]) as r2:
+            fm = r2.read(1, window=iw["w"])
+    v = ndvi(red, nir, iw["maski"] & fmask_kelpaa(fm) & (red != -9999) & (nir != -9999))
+    s = tilastot(v, iw, None, 0)
+    return {"pvm": pvm, "lahde": lahde, "perhe": "HLS", "id": kuvaid, "ndvi": v, "iw": iw, **s}
+
+
+def stac_haku(url, body, headers=None):
+    kuvat, req = [], {"json": body}
+    for _ in range(20):
+        r = requests.post(url, headers=headers, timeout=60, **req) if "json" in req else requests.get(url, headers=headers, timeout=60)
+        r.raise_for_status()
+        js = r.json()
+        kuvat += js.get("features", [])
+        nx = next((l for l in js.get("links", []) if l.get("rel") == "next"), None)
+        if not nx:
+            break
+        url = nx["href"]
+        req = {"json": {**body, **(nx.get("body") or {})}} if nx.get("method") == "POST" else {}
+    return kuvat
+
+
+_sas = {}
+
+
+def pc_allekirjoita(href):
+    if ".blob.core.windows.net/" not in href:
+        return href
+    tili = href.split("//")[1].split(".")[0]
+    kontti = href.split(".blob.core.windows.net/")[1].split("/")[0]
+    k = f"{tili}/{kontti}"
+    if k not in _sas or _sas[k][1] < time.time() + 300:
+        js = requests.get(f"{PC_SAS}/{k}", timeout=30).json()
+        exp = dt.datetime.fromisoformat(js.get("msft:expiry", "").replace("Z", "+00:00")).timestamp() if js.get("msft:expiry") else time.time() + 1800
+        _sas[k] = (js["token"], exp)
+    return href + ("&" if "?" in href else "?") + _sas[k][0]
+
+
+def nasa_osoite(href, token):
+    """Seuraa LP DAACin uudelleenohjauksen esiallekirjoitettuun osoitteeseen (Bearer-token)."""
+    url = href
+    for _ in range(5):
+        r = requests.get(url, headers={"Authorization": f"Bearer {token}"}, allow_redirects=False, stream=True, timeout=60)
+        r.close()
+        if r.status_code in (301, 302, 303, 307, 308):
+            loc = r.headers["Location"]
+            if "urs.earthdata.nasa.gov" in loc:
+                sys.exit("Earthdata hylkäsi tokenin. Luo uusi token osoitteessa urs.earthdata.nasa.gov (Generate Token).")
+            if "earthdatacloud.nasa.gov" not in loc:
+                return loc, None
+            url = loc
+            continue
+        if r.status_code == 200:
+            return url, {"GDAL_HTTP_HEADERS": f"Authorization: Bearer {token}"}
+        if r.status_code in (401, 403):
+            sys.exit(f"Earthdata: HTTP {r.status_code}. Tarkista EARTHDATA_TOKEN.")
+        r.raise_for_status()
+    return url, {"GDAL_HTTP_HEADERS": f"Authorization: Bearer {token}"}
+
+
+def hae_hls(lohko, a):
+    lahde = a.hls_lahde
+    kok = HLS[lahde]
+    body = {"collections": list(kok), "intersects": lohko["geojson"], "datetime": f"{a.alku}T00:00:00Z/{a.loppu}T23:59:59Z", "limit": 250}
+    if lahde == "pc":
+        body["query"] = {"eo:cloud_cover": {"lte": a.pilvisyys}}
+        kuvat = stac_haku(f"{PC_STAC}/search", body)
+    else:
+        token = os.environ.get("EARTHDATA_TOKEN")
+        if not token:
+            sys.exit("Aseta Earthdata-token: export EARTHDATA_TOKEN=... (ohjeet README:ssä).")
+        kuvat = [k for k in stac_haku(f"{NASA_STAC}/search", body)
+                 if (k.get("properties", {}).get("eo:cloud_cover") or 0) <= a.pilvisyys]
+    print(f"HLS ({lahde}): {len(kuvat)} kuvaa", file=sys.stderr)
+    env = {"GDAL_DISABLE_READDIR_ON_OPEN": "EMPTY_DIR", "GDAL_HTTP_MAX_RETRY": "3", "GDAL_HTTP_RETRY_DELAY": "2"}
+
+    def yksi(k):
+        try:
+            red, nir, src = kok[k["collection"]]
+            hrefs = [k["assets"][x]["href"] for x in (red, nir, "Fmask")]
+            e = dict(env)
+            if lahde == "pc":
+                urls = [pc_allekirjoita(h) for h in hrefs]
+            else:
+                ratk = [nasa_osoite(h, os.environ["EARTHDATA_TOKEN"]) for h in hrefs]
+                urls = [u for u, _ in ratk]
+                for _, x in ratk:
+                    e.update(x or {})
+            return hls_kuva(src, k["properties"]["datetime"][:10], k["id"], urls, lohko, a, e)
+        except Exception as ex:  # noqa: BLE001
+            print(f"  ohitettu {k.get('id')}: {ex}", file=sys.stderr)
+            return None
+
+    with ThreadPoolExecutor(4) as ex:
+        return list(ex.map(yksi, kuvat))
+
+
+# ---------------------------------------------------------------- PlanetScope
+
+
+def ps_kuva(kuvaid, sr_polku, udm_polku, lohko, a):
+    import rasterio
+
+    with rasterio.open(sr_polku) as sr:
+        iw = ikkuna(sr, lohko, a.puskuri)
+        if not iw or not iw["n"]:
+            return None
+        red, nir = sr.read(3, window=iw["w"]), sr.read(4, window=iw["w"])
+    with rasterio.open(udm_polku) as u:
+        clear = u.read(1, window=iw["w"]) == 1
+    v = ndvi(red, nir, iw["maski"] & clear)
+    s = tilastot(v, iw, None, 0)
+    pvm = f"{kuvaid[:4]}-{kuvaid[4:6]}-{kuvaid[6:8]}"
+    return {"pvm": pvm, "lahde": "PlanetScope", "perhe": "PS", "id": kuvaid, "ndvi": v, "iw": iw, **s}
+
+
+def ps_haku(lohko, a, avain):
+    body = {"item_types": ["PSScene"], "filter": {"type": "AndFilter", "config": [
+        {"type": "GeometryFilter", "field_name": "geometry", "config": lohko["geojson"]},
+        {"type": "DateRangeFilter", "field_name": "acquired", "config": {"gte": f"{a.alku}T00:00:00Z", "lte": f"{a.loppu}T23:59:59Z"}},
+        {"type": "RangeFilter", "field_name": "cloud_cover", "config": {"lte": min(1, a.pilvisyys / 100)}},
+        {"type": "AssetFilter", "config": ["ortho_analytic_4b_sr"]},
+        {"type": "PermissionFilter", "config": ["assets:download"]}]}}
+    r = requests.post(f"{PL_DATA}/quick-search?_page_size=250", json=body, auth=(avain, ""), timeout=60)
+    if r.status_code in (401, 403):
+        sys.exit(f"Planet: HTTP {r.status_code}. Tarkista PL_API_KEY ja tilin PlanetScope-oikeudet.")
+    r.raise_for_status()
+    js, kaikki = r.json(), []
+    kaikki += js.get("features", [])
+    while js.get("_links", {}).get("_next"):
+        js = requests.get(js["_links"]["_next"], auth=(avain, ""), timeout=60).json()
+        kaikki += js.get("features", [])
+    paras = {}
+    for f in kaikki:
+        p = f["properties"]
+        d = p["acquired"][:10]
+        pis = p.get("clear_percent", 100 * (1 - p.get("cloud_cover", 0)))
+        if d not in paras or pis > paras[d][1]:
+            paras[d] = (f["id"], pis)
+    return [paras[d][0] for d in sorted(paras)], len(kaikki)
+
+
+def ps_tilaa(lohko, ids, avain, nimi):
+    body = {"name": nimi, "products": [{"item_ids": ids, "item_type": "PSScene", "product_bundle": "analytic_sr_udm2"}],
+            "tools": [{"clip": {"aoi": lohko["geojson"]}}, {"harmonize": {"target_sensor": "Sentinel-2"}}]}
+    r = requests.post(PL_ORDERS, json=body, auth=(avain, ""), timeout=60)
+    if not r.ok:
+        sys.exit(f"Planet-tilaus epäonnistui: HTTP {r.status_code} {r.text[:300]}")
+    return r.json()["id"]
+
+
+def ps_odota(tilaus, avain, minuutit):
+    loppu = time.time() + minuutit * 60
+    while True:
+        js = requests.get(f"{PL_ORDERS}/{tilaus}", auth=(avain, ""), timeout=60).json()
+        tila = js.get("state")
+        print(f"Tilaus {tilaus}: {tila}", file=sys.stderr)
+        if tila in ("success", "partial"):
+            return js["_links"]["results"]
+        if tila in ("failed", "cancelled"):
+            sys.exit(f"Tilaus päättyi tilaan {tila}: {js.get('error_hints') or ''}")
+        if time.time() > loppu:
+            sys.exit(f"Tilaus ei valmistunut {minuutit} minuutissa. Jatka myöhemmin: --planet-tilaus {tilaus}")
+        time.sleep(30)
+
+
+def ps_kasittele(tulokset, lohko, a, kansio):
+    parit = {}
+    for t in tulokset:
+        nimi = t.get("name", "")
+        if not nimi.lower().endswith(".tif"):
+            continue
+        tiedosto = pathlib.Path(nimi).name
+        kuvaid = tiedosto.split("_3B_")[0]
+        laji = "udm" if "udm2" in tiedosto.lower() else "sr" if "AnalyticMS_SR" in tiedosto else None
+        if not laji:
+            continue
+        polku = pathlib.Path(kansio) / tiedosto
+        if not polku.exists():
+            with requests.get(t["location"], stream=True, timeout=120) as r:
+                r.raise_for_status()
+                with open(polku, "wb") as f:
+                    for osa in r.iter_content(1 << 20):
+                        f.write(osa)
+        parit.setdefault(kuvaid, {})[laji] = polku
+    raaka = []
+    for kuvaid, p in sorted(parit.items()):
+        if "sr" in p and "udm" in p:
+            try:
+                raaka.append(ps_kuva(kuvaid, p["sr"], p["udm"], lohko, a))
+            except Exception as ex:  # noqa: BLE001
+                print(f"  ohitettu {kuvaid}: {ex}", file=sys.stderr)
+    return raaka
+
+
+# ---------------------------------------------------------------- pääohjelma
+
+
+def kirjoita(havainnot, polku):
+    rivit = ["# päivä;lähde;tunniste;NDVI;kelvolliset %;muuttunut %"]
+    for o in havainnot:
+        rivit.append(";".join([o["pvm"], o["lahde"], o["id"], f"{o['arvo']:.3f}", str(o["kelvolliset"]),
+                               "" if o["muuttunut"] is None else str(o["muuttunut"])]))
+    teksti = "\n".join(rivit) + "\n"
+    if polku == "-":
+        sys.stdout.write(teksti)
+    else:
+        pathlib.Path(polku).write_text(teksti, encoding="utf-8")
+        print(f"{len(havainnot)} havaintoa → {polku}. Liitä sisältö sovelluksen Liitä CSV -kenttään.", file=sys.stderr)
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description="Niittoraportin havaintojen haku (HLS, PlanetScope)")
+    ap.add_argument("--lohko", required=True, help="lohkon GeoJSON (WGS84 tai EPSG:3067)")
+    ap.add_argument("--alku", help="alkupäivä VVVV-KK-PP")
+    ap.add_argument("--loppu", help="loppupäivä VVVV-KK-PP")
+    ap.add_argument("--hls-lahde", choices=["pc", "nasa", "ei"], default="pc", help="pc = Planetary Computer (oletus), nasa = LP DAAC (EARTHDATA_TOKEN)")
+    ap.add_argument("--planet", action="store_true", help="hae ja tilaa PlanetScope (PL_API_KEY)")
+    ap.add_argument("--planet-tilaus", help="käsittele aiemman tilauksen tulokset")
+    ap.add_argument("--kylla", action="store_true", help="tilaa kysymättä vahvistusta")
+    ap.add_argument("--odota", type=int, default=60, help="Planet-tilauksen enimmäisodotus minuutteina")
+    ap.add_argument("--puskuri", type=float, default=10, help="reunapuskuri m")
+    ap.add_argument("--pudotus", type=float, default=0.12, help="muuttuneen pikselin NDVI-pudotus")
+    ap.add_argument("--kelvolliset", type=float, default=50, help="vertailuhavainnon kelvolliset pikselit ≥ %%")
+    ap.add_argument("--pilvisyys", type=float, default=80, help="kuvan kokonaispilvisyys enintään %%")
+    ap.add_argument("--ulos", default="havainnot.csv", help="CSV-tiedosto tai - (tulosta)")
+    a = ap.parse_args(argv)
+
+    lohko = lue_lohko(a.lohko)
+    print(f"Lohko {lohko['ala_m2'] / 1e4:.2f} ha", file=sys.stderr)
+    tarvitsee_ajan = a.hls_lahde != "ei" or a.planet
+    if tarvitsee_ajan and not (a.alku and a.loppu):
+        sys.exit("Anna --alku ja --loppu.")
+
+    raaka = []
+    if a.hls_lahde != "ei":
+        raaka += hae_hls(lohko, a)
+
+    if a.planet or a.planet_tilaus:
+        avain = os.environ.get("PL_API_KEY")
+        if not avain:
+            sys.exit("Aseta Planet-API-avain: export PL_API_KEY=... (ohjeet README:ssä).")
+        tilaus = a.planet_tilaus
+        if not tilaus:
+            ids, kaikki = ps_haku(lohko, a, avain)
+            km2 = len(ids) * lohko["ala_m2"] / 1e6
+            print(f"PlanetScope: {kaikki} kuvaa, {len(ids)} päivää. Tilattava ala ≈ {km2:.2f} km².", file=sys.stderr)
+            if not ids:
+                ids = []
+            elif not a.kylla and input(f"Tilataanko {len(ids)} kuvaa (≈ {km2:.2f} km²)? [k/E] ").strip().lower() not in ("k", "kyllä", "y"):
+                print("Tilausta ei tehty.", file=sys.stderr)
+                ids = []
+            if ids:
+                nimi = f"Niittoraportti {lohko['properties'].get('tunnus', '')} {dt.date.today()}".strip()
+                tilaus = ps_tilaa(lohko, ids, avain, nimi)
+                print(f"Tilaus {tilaus} lähetetty.", file=sys.stderr)
+        if tilaus:
+            tulokset = ps_odota(tilaus, avain, a.odota)
+            with tempfile.TemporaryDirectory() as kansio:
+                raaka += ps_kasittele(tulokset, lohko, a, kansio)
+
+    kirjoita(viimeistele(raaka, a), a.ulos)
+
+
+if __name__ == "__main__":
+    main()

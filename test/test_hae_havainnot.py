@@ -1,0 +1,55 @@
+"""
+Skriptin hae_havainnot.py laskennan testi samoilla synteettisillä kuvilla kuin selainversiolla.
+Tulosten on oltava samat kuin test/datahaku.test.js:ssä.
+
+    pip install rasterio numpy pyproj shapely requests
+    python test/test_hae_havainnot.py
+"""
+import argparse
+import pathlib
+import sys
+
+D = pathlib.Path(__file__).parent
+sys.path.insert(0, str(D.parent / "scripts"))
+import hae_havainnot as H  # noqa: E402
+
+FX = D / "fixtures"
+a = argparse.Namespace(puskuri=10, pudotus=0.12, kelvolliset=50)
+lohko = H.lue_lohko(FX / "field.geojson")
+assert abs(lohko["ala_m2"] - 60000) < 1, lohko["ala_m2"]
+
+
+def hls(src, pvm, kid, pref, nir):
+    return H.hls_kuva(src, pvm, kid, [FX / f"{pref}.B04.tif", FX / f"{pref}.{nir}.tif", FX / f"{pref}.Fmask.tif"], lohko, a)
+
+
+raaka = [
+    hls("HLS-S30", "2026-07-10", "k1", "hls1", "B8A"),
+    hls("HLS-L30", "2026-07-20", "k2", "hls2", "B05"),
+    hls("HLS-S30", "2026-08-05", "k3", "hls3", "B8A"),
+    hls("HLS-S30", "2026-08-05", "k4", "hls4", "B8A"),
+    hls("HLS-L30", "2026-08-15", "k5", "hls5", "B05"),
+]
+assert raaka[0]["n"] == 54, raaka[0]["n"]
+obs = {o["pvm"]: o for o in H.viimeistele(raaka, a)}
+assert list(obs) == ["2026-07-10", "2026-07-20", "2026-08-05", "2026-08-15"], list(obs)
+assert (obs["2026-07-10"]["arvo"], obs["2026-07-10"]["kelvolliset"], obs["2026-07-10"]["muuttunut"]) == (0.8, 100, None)
+assert (obs["2026-07-20"]["arvo"], obs["2026-07-20"]["kelvolliset"]) == (0.45, 33)
+assert obs["2026-08-05"]["id"] == "k3"
+assert (obs["2026-08-05"]["arvo"], obs["2026-08-05"]["kelvolliset"], obs["2026-08-05"]["muuttunut"]) == (0.45, 100, 94), obs["2026-08-05"]
+assert (obs["2026-08-15"]["arvo"], obs["2026-08-15"]["kelvolliset"], obs["2026-08-15"]["muuttunut"]) == (0.55, 84, 6)
+print("ok HLS:", [(o["pvm"], o["arvo"], o["kelvolliset"], o["muuttunut"]) for o in obs.values()])
+
+ps = [H.ps_kuva(i, FX / f"{i}_3B_AnalyticMS_SR_harmonized_clip.tif", FX / f"{i}_3B_udm2_clip.tif", lohko, a)
+      for i in ("20260801_093000_00_2475", "20260810_093100_00_2475")]
+p = H.viimeistele(ps, a)
+assert [(o["pvm"], o["arvo"], o["kelvolliset"], o["muuttunut"]) for o in p][0] == ("2026-08-01", 0.83, 100, None)
+assert (p[1]["pvm"], p[1]["arvo"], p[1]["kelvolliset"], p[1]["muuttunut"]) == ("2026-08-10", 0.4, 93, 100)
+print("ok PlanetScope:", [(o["pvm"], o["arvo"], o["kelvolliset"], o["muuttunut"]) for o in p])
+
+out = D / "_tmp.csv"
+H.kirjoita(H.viimeistele(raaka, a), out)
+rivit = out.read_text(encoding="utf-8").splitlines()
+out.unlink()
+assert rivit[0].startswith("#") and rivit[3] == "2026-08-05;HLS-S30;k3;0.450;100;94", rivit
+print("ok CSV-muoto")

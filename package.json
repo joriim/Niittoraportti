@@ -1,0 +1,11 @@
+{
+  "name": "niittoraportti",
+  "private": true,
+  "description": "Niiton tunnistus satelliittiaikasarjoista selaimessa",
+  "scripts": {
+    "test": "node test/core.test.js && node test/datahaku.test.js"
+  },
+  "devDependencies": {
+    "geotiff": "2.1.3"
+  }
+}

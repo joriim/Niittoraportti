@@ -46,7 +46,7 @@
     minChanged: 90,     // oma: tukiehto koskee koko lohkoa → ≥ 90 % pikseleistä muuttunut
     confMin: 0.6,       // oma todennäköisyysraja (vrt. Ruokaviraston status-kohtainen raja)
     bufferM: 10,        // raportoitava parametri; Kolecka ym. 2018: kutistettu lohko parantaa tulosta
-    cloudMask: 'HLS: Fmask (pilvi, varjo, lumi, aerosoli korkea); PlanetScope: UDM2 clear'
+    cloudMask: 'HLS: Fmask (sirrus, pilvi, pilven viereinen, varjo, lumi, aerosoli korkea); PlanetScope: UDM2 clear'
   };
 
   function days(a, b) { return (Date.parse(b) - Date.parse(a)) / 864e5; }
