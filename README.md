@@ -1,13 +1,20 @@
 # Niittoraportti
 
-**Kun satelliitti ei näe niittoa.** Tämä yksisivuinen sovellus kokoaa:
+**Kun satelliitti ei näe niittoa.** Yksisivuinen selainsovellus, joka sisältää:
 
-- miten Ruokavirasto todentaa luonnonhoitonurmien niiton satelliittiseurannalla ja Vipu-mobiilin kuvalla
-- mihin vaatimus vastata vain Vipu-mobiilin kameralla perustuu: EU-asetukset (EU) 2021/2116 ja 2022/1173 sekä laki 1334/2022, 21 §
-- ehdotuksen porrastetusta todentamisesta, jossa avoin HLS-data haetaan ennen selvityspyyntöä
-- **niittoraportti-työkalun**, joka muodostaa HLS- ja PlanetScope-havainnoista (päivä, lähde, kuvatunniste, NDVI) niittovälin, aikasarjakuvan, lisätietotekstin Vipu-mobiiliin ja JSON-raportin
+- kuvauksen siitä, miten Ruokavirasto todentaa luonnonhoitonurmien niiton satelliittiseurannalla ja Vipu-mobiilin kuvalla
+- oikeusperustan, johon vaatimus vastata Vipu-mobiilin kameralla perustuu: EU-asetukset (EU) 2021/2116 ja 2022/1173 sekä laki 1334/2022, 21 §
+- ehdotuksen porrastetusta todentamisesta HLS:llä ja PlanetScopella
+- **niiton tunnistuksen**, joka seuraa Ruokaviraston satelliittiseurannan rakennetta (aikasarja → muutos → pysyvyys → todennäköisyysraja). Tunnistus toteutetaan avoimella Sen4CAP-niittoalgoritmilla (De Vroey ym. 2022), ja lähteinä ovat HLS, Sentinel-2, PlanetScope ja Sentinel-1-koherenssi. Tuloksena saadaan lisätietoteksti Vipu-mobiiliin ja toistettava JSON-raportti.
 
 Kaikki laskenta tapahtuu selaimessa, eikä mitään tietoa lähetetä minnekään.
+
+| Tiedosto | Sisältö |
+| --- | --- |
+| `index.html` | sovellus |
+| `core.js` | tunnistuslogiikka ilman DOM-riippuvuuksia |
+| `METHOD.md` | menetelmä, raja-arvot ja niiden lähteet, rajoitukset |
+| `test/core.test.js` | yksikkötestit, aja komennolla `node test/core.test.js` |
 
 ## Käyttö
 
@@ -15,4 +22,4 @@ Avaa `index.html` selaimessa tai julkaise repo GitHub Pagesilla (Settings → Pa
 
 ## Huomio
 
-Sivu ei ole Ruokaviraston palvelu eikä oikeudellinen neuvo. Satelliittiraportti ei nykyisellään korvaa Vipu-mobiilin kuvaa. Tilanne 1.11.2026. Lain 1334/2022 pykälät on tarkistettu alkuperäisestä sanamuodosta, joten ajantasainen versio kannattaa tarkistaa Finlexistä.
+Sivu ei ole Ruokaviraston palvelu eikä oikeudellinen neuvo. Raportti ei nykyisellään korvaa Vipu-mobiilin kuvaa. Omia raja-arvoja ei ole kalibroitu Suomen maastoaineistolla. Tilanne 1.11.2026.

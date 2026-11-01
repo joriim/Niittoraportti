@@ -4,40 +4,42 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Niittoraportti</title>
-<meta name="description" content="Kun satelliitti ei näe niittoa: oikeusperusta, ehdotettu prosessi ja työkalu HLS- ja PlanetScope-havaintojen raportointiin.">
+<meta name="description" content="Kun satelliitti ei näe niittoa: oikeusperusta, ehdotettu prosessi ja Sen4CAP-tyyppinen niiton tunnistus HLS-, Sentinel- ja PlanetScope-havainnoista.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
   --bg:#f6f5f0;--surface:#ffffff;--surface-2:#eeede6;--ink:#1d2320;--muted:#5d655f;--line:#d9d8cf;
   --accent:#2f6f4e;--accent-soft:#e3efe7;--warn:#a5671a;--warn-soft:#f6ecdc;--bad:#a4362f;--bad-soft:#f6e1df;
-  --blue:#2c6aa8;--blue-soft:#e3edf7;--radius:12px;
+  --blue:#2c6aa8;--blue-soft:#e3edf7;--violet:#6b4fa3;--radius:12px;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     --bg:#121614;--surface:#1a201d;--surface-2:#222a26;--ink:#e7ece8;--muted:#9aa59e;--line:#2f3833;
     --accent:#6cc497;--accent-soft:#1f3329;--warn:#e0a85a;--warn-soft:#3a2f1f;--bad:#e37c73;--bad-soft:#3a2321;
-    --blue:#7fb2e5;--blue-soft:#1d2a38;
+    --blue:#7fb2e5;--blue-soft:#1d2a38;--violet:#b29be0;
   }
 }
 :root[data-theme="dark"]{
   --bg:#121614;--surface:#1a201d;--surface-2:#222a26;--ink:#e7ece8;--muted:#9aa59e;--line:#2f3833;
   --accent:#6cc497;--accent-soft:#1f3329;--warn:#e0a85a;--warn-soft:#3a2f1f;--bad:#e37c73;--bad-soft:#3a2321;
-  --blue:#7fb2e5;--blue-soft:#1d2a38;
+  --blue:#7fb2e5;--blue-soft:#1d2a38;--violet:#b29be0;
 }
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Inter,system-ui,sans-serif}
 a{color:var(--blue)}
-.wrap{max-width:960px;margin:0 auto;padding:0 16px}
+code{font:13px "JetBrains Mono",monospace;background:var(--surface-2);padding:1px 5px;border-radius:4px}
+.wrap{max-width:980px;margin:0 auto;padding:0 16px}
 header.top{padding:40px 0 24px;border-bottom:1px solid var(--line);position:relative}
 .kicker{font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
 h1{font-size:clamp(28px,5vw,42px);line-height:1.12;margin:8px 0 12px;letter-spacing:-.02em}
-.lead{font-size:18px;color:var(--muted);max-width:720px;margin:0}
+.lead{font-size:18px;color:var(--muted);max-width:740px;margin:0}
 nav.tabs{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
 nav.tabs .wrap{display:flex;gap:4px;overflow-x:auto;padding-top:8px;padding-bottom:8px}
 nav.tabs button{flex:0 0 auto;border:1px solid transparent;background:none;color:var(--muted);font:500 14px Inter,sans-serif;padding:8px 14px;border-radius:999px;cursor:pointer}
 nav.tabs button[aria-selected="true"]{background:var(--surface);border-color:var(--line);color:var(--ink)}
+nav.tabs button:focus-visible{outline:2px solid var(--blue)}
 main{padding:32px 0 64px}
 section.panel{display:none}
 section.panel.active{display:block}
@@ -45,6 +47,7 @@ h2{font-size:24px;margin:0 0 8px;letter-spacing:-.01em}
 h3{font-size:17px;margin:24px 0 8px}
 p{margin:0 0 14px}
 .muted{color:var(--muted)}
+.small{font-size:14px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:20px}
 .grid{display:grid;gap:16px}
 @media(min-width:720px){.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}}
@@ -68,39 +71,54 @@ details .body{padding:0 16px 16px}
 .tbl{width:100%;border-collapse:collapse;font-size:14px}
 .tbl th,.tbl td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:top}
 .tbl th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600}
-.scroll{overflow-x:auto}
+.scroll{overflow-x:auto;position:relative}
 .pill{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;margin-bottom:4px}
 .pill.y{background:var(--accent-soft);color:var(--accent)}
 .pill.p{background:var(--warn-soft);color:var(--warn)}
 .pill.n{background:var(--bad-soft);color:var(--bad)}
 .flow svg{width:100%;height:auto;display:block}
-.flow text{font-family:Inter,sans-serif}
 label{display:block;font-size:13px;font-weight:600;margin:0 0 4px;color:var(--muted)}
 input,select,textarea{width:100%;font:15px Inter,sans-serif;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:9px 10px}
-textarea{font-family:"JetBrains Mono",monospace;font-size:13px;min-height:120px}
+textarea{font-family:"JetBrains Mono",monospace;font-size:13px;min-height:110px}
 input:focus,select:focus,textarea:focus{outline:2px solid var(--blue);outline-offset:1px}
 .row{display:grid;gap:12px;grid-template-columns:1fr}
-@media(min-width:640px){.row.r3{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:640px){.row.r3{grid-template-columns:repeat(3,1fr)}.row.r4{grid-template-columns:repeat(4,1fr)}}
 .btn{display:inline-flex;align-items:center;gap:6px;font:600 14px Inter,sans-serif;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:9px 14px;cursor:pointer}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 :root[data-theme="dark"] .btn.primary{color:#0f1512}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .btn.primary{color:#0f1512}}
 .btn.sm{padding:5px 10px;font-size:13px}
-.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-.obs{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px;min-width:560px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.obs{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px;min-width:780px}
 .obs td,.obs th{padding:6px 4px;border-bottom:1px solid var(--line)}
 .obs th{font-size:12px;color:var(--muted);text-align:left;font-weight:600}
 .obs input,.obs select{padding:6px 8px;font-size:14px}
 .obs td:last-child{width:36px}
+.obs .num{width:84px}
 .del{border:none;background:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px 8px}
 #chart{width:100%;height:auto;display:block;margin-top:8px}
 .result{margin-top:16px}
-.badge{font-weight:600}
+.verdict{font-size:18px;font-weight:700}
+.v-strong{color:var(--accent)}.v-moderate{color:var(--blue)}.v-weak{color:var(--warn)}.v-fail,.v-none{color:var(--bad)}
+.checks{list-style:none;padding:0;margin:12px 0 0}
+.checks li{padding:4px 0 4px 26px;position:relative;font-size:14px}
+.checks li::before{position:absolute;left:0;top:4px;font-weight:700}
+.checks li.ok::before{content:"✓";color:var(--accent)}
+.checks li.warn::before{content:"!";color:var(--warn)}
+.checks li.fail::before{content:"✕";color:var(--bad)}
+.checks li.info{color:var(--muted)}
+.checks li.info::before{content:"·";color:var(--muted)}
+.ev{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:8px;font-size:14px}
+.ev.acc{border-color:var(--accent)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:6px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:-1px}
 pre{background:var(--surface-2);border-radius:8px;padding:14px;overflow-x:auto;font:13px/1.5 "JetBrains Mono",monospace;margin:8px 0 0;white-space:pre-wrap;word-break:break-word}
 footer{border-top:1px solid var(--line);padding:24px 0 40px;font-size:14px;color:var(--muted)}
-.src li{margin-bottom:6px}
+.src li{margin-bottom:8px}
 .toggle{position:absolute;right:16px;top:16px}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.badge-ex{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--warn-soft);color:var(--warn);margin-left:8px}
 </style>
 </head>
 <body>
@@ -109,36 +127,37 @@ footer{border-top:1px solid var(--line);padding:24px 0 40px;font-size:14px;color
     <button class="btn sm toggle" id="themeBtn" type="button" aria-label="Vaihda teema">◐</button>
     <div class="kicker">Satelliittiseuranta · luonnonhoitonurmet</div>
     <h1>Kun satelliitti ei näe niittoa</h1>
-    <p class="lead">Ruokavirasto todentaa niiton Sentinel-satelliiteilla ja viljelijän Vipu-mobiilikuvalla. Laki vaatii kuitenkin vain riittävää selvitystä, ja EU-sääntely sallii vastaavan arvon datan. Sovellus kokoaa oikeusperustan, ehdotetun prosessin ja työkalun HLS- ja PlanetScope-havaintojen raportointiin.</p>
+    <p class="lead">Ruokavirasto todentaa niiton Sentinel-satelliiteilla ja viljelijän Vipu-mobiilikuvalla. Laki vaatii kuitenkin vain riittävää selvitystä, ja EU-sääntely sallii vastaavan arvon datan. Sovellus kokoaa oikeusperustan ja ehdotetun prosessin. Sen työkalu tunnistaa niiton Sen4CAP-tyyppisellä muutostunnistuksella, jossa lähteinä ovat HLS, Sentinel-2, PlanetScope ja Sentinel-1.</p>
   </div>
 </header>
 
 <nav class="tabs" aria-label="Osiot">
   <div class="wrap" role="tablist">
-    <button role="tab" aria-selected="true" data-tab="nyt">Nykytila</button>
-    <button role="tab" aria-selected="false" data-tab="laki">Oikeusperusta</button>
-    <button role="tab" aria-selected="false" data-tab="data">Vastaava data</button>
-    <button role="tab" aria-selected="false" data-tab="prosessi">Ehdotettu prosessi</button>
-    <button role="tab" aria-selected="false" data-tab="tyokalu">Niittoraportti-työkalu</button>
-    <button role="tab" aria-selected="false" data-tab="lahteet">Lähteet</button>
+    <button role="tab" aria-selected="true" aria-controls="nyt" data-tab="nyt" id="tab-nyt">Nykytila</button>
+    <button role="tab" aria-selected="false" aria-controls="laki" data-tab="laki" id="tab-laki" tabindex="-1">Oikeusperusta</button>
+    <button role="tab" aria-selected="false" aria-controls="data" data-tab="data" id="tab-data" tabindex="-1">Vastaava data</button>
+    <button role="tab" aria-selected="false" aria-controls="prosessi" data-tab="prosessi" id="tab-prosessi" tabindex="-1">Ehdotettu prosessi</button>
+    <button role="tab" aria-selected="false" aria-controls="tyokalu" data-tab="tyokalu" id="tab-tyokalu" tabindex="-1">Niittoraportti</button>
+    <button role="tab" aria-selected="false" aria-controls="menetelma" data-tab="menetelma" id="tab-menetelma" tabindex="-1">Menetelmä</button>
+    <button role="tab" aria-selected="false" aria-controls="lahteet" data-tab="lahteet" id="tab-lahteet" tabindex="-1">Lähteet</button>
   </div>
 </nav>
 
 <main class="wrap">
 
-<section class="panel active" id="nyt" role="tabpanel">
+<section class="panel active" id="nyt" role="tabpanel" aria-labelledby="tab-nyt">
   <h2>Näin niitto todennetaan nyt</h2>
   <p class="muted">Satelliitti ensin, viljelijän kuva toissijaisesti.</p>
   <div class="grid g3" style="margin:16px 0 24px">
-    <div class="card stat"><b>~1 milj.</b><span>kasvulohkoa analysoidaan automaattisesti koko kasvukauden</span></div>
-    <div class="card stat"><b>15.9.</b><span>niiton tai laidunnuksen määräpäivä luonnonhoitonurmella (vähintään joka toinen vuosi)</span></div>
-    <div class="card stat"><b>3</b><span>tapaa reagoida selvityspyyntöön</span></div>
+    <div class="card stat"><b>~1 milj.</b><span>kasvulohkoa analysoidaan automaattisesti koko kasvukauden [6]</span></div>
+    <div class="card stat"><b>15.9.</b><span>niiton tai laidunnuksen määräpäivä luonnonhoitonurmella, vähintään joka toinen vuosi [4]</span></div>
+    <div class="card stat"><b>3</b><span>tapaa reagoida selvityspyyntöön [9]</span></div>
   </div>
   <div class="grid g2">
     <div class="card">
       <h3 style="margin-top:0">Satelliittiketju</h3>
-      <p>Ilmatieteen laitos esikäsittelee Sentinel-1-tutka- ja Sentinel-2-optiset kuvat analyysivalmiiksi. Lohkoilta irrotetaan aikasarjat, ja koneoppimismalli ennustaa lohkon tilan (kasvussa, niitetty, muokattu) eri ajankohtina.</p>
-      <p class="muted" style="margin:0">Runsas pilvisyys voi estää niiton havaitsemisen. Ruokavirasto neuvoo olemaan odottamatta satelliitin havaintoa.</p>
+      <p>Ilmatieteen laitos esikäsittelee Sentinel-1-tutka- ja Sentinel-2-optiset kuvat analyysivalmiiksi. Lohkoilta irrotetaan aikasarjat, ja koneoppimismalli ennustaa lohkon tilan (kasvussa, niitetty, muokattu) eri ajankohtina. Kullekin tilalle on oma todennäköisyysraja, ja muutoksen pysyvyys varmistetaan [5][6].</p>
+      <p class="muted" style="margin:0">Runsas pilvisyys voi estää niiton havaitsemisen [5].</p>
     </div>
     <div class="card">
       <h3 style="margin-top:0">Selvityspyyntöön vastaaminen</h3>
@@ -147,56 +166,56 @@ footer{border-top:1px solid var(--line);padding:24px 0 40px;font-size:14px;color
         <li>Aiemmin Vipu-mobiililla otettu vapaakuva, jonka sijainti osuu lohkon rajojen sisään.</li>
         <li>Hakemuksen muuttaminen tai tukien peruminen Vipu-palvelussa.</li>
       </ol>
-      <p class="muted" style="margin:12px 0 0">Jos viljelijä ei reagoi, satelliittitulos jää voimaan. Galleriasta tuotua kuvaa tai muuta tiedostoa ei voi liittää.</p>
+      <p class="muted" style="margin:12px 0 0">Jos viljelijä ei reagoi, satelliittitulos jää voimaan [10]. Galleriasta tuotua kuvaa tai muuta tiedostoa ei voi liittää.</p>
     </div>
   </div>
 </section>
 
-<section class="panel" id="laki" role="tabpanel">
+<section class="panel" id="laki" role="tabpanel" aria-labelledby="tab-laki">
   <h2>Mihin kameravaatimus perustuu?</h2>
   <p class="muted">Avaa taso nähdäksesi, mitä se sanoo selvityksestä.</p>
   <ul class="chain">
-    <li><details><summary><span class="lvl">EU-asetus</span><span class="ttl">(EU) 2021/2116, 65 ja 70 art.</span></summary>
-      <div class="body">Satelliittiseuranta (pinta-alamonitorointi) perustuu Copernicus Sentinel -dataan <em>tai muuhun vähintään vastaavan arvon dataan</em>.</div></details></li>
-    <li><details><summary><span class="lvl">EU-täytäntöönpanoasetus</span><span class="ttl">(EU) 2022/1173, 10 art. 8 kohta</span></summary>
+    <li><details><summary><span class="lvl">EU-asetus</span><span class="ttl">(EU) 2021/2116, 65 ja 70 art. [1]</span></summary>
+      <div class="body">Satelliittiseuranta perustuu Copernicus Sentinel -dataan <em>tai muuhun vähintään vastaavan arvon dataan</em>.</div></details></li>
+    <li><details><summary><span class="lvl">EU-täytäntöönpanoasetus</span><span class="ttl">(EU) 2022/1173, 10 art. 8 kohta [2]</span></summary>
       <div class="body">Viljelijälle on kerrottava havaituista puutteista, jotta hän voi muuttaa hakemusta <em>tai toimittaa lisänäyttöä</em>.</div></details></li>
-    <li><details><summary><span class="lvl">EU-täytäntöönpanoasetus</span><span class="ttl">(EU) 2022/1173, 11 art.</span></summary>
+    <li><details><summary><span class="lvl">EU-täytäntöönpanoasetus</span><span class="ttl">(EU) 2022/1173, 11 art. [2][3]</span></summary>
       <div class="body">Jäsenvaltio <em>voi</em> käyttää vastaavan arvon dataa, jos se on digitaalista ja automaattisesti käsiteltävää, järjestelmällisesti saatavilla, syrjimätöntä ja soveltuu tukiehdon toteamiseen. Geotagatut valokuvat luetaan tällaiseksi dataksi. Muutosasetus (EU) 2024/2202 poisti kuvien etusijan muuhun vastaavan arvon dataan nähden.</div></details></li>
-    <li><details><summary><span class="lvl">Kansallinen laki</span><span class="ttl">Laki 1334/2022, 21 §</span></summary>
+    <li><details><summary><span class="lvl">Kansallinen laki</span><span class="ttl">Laki 1334/2022, 21 § [7]</span></summary>
       <div class="body">Viljelijälle lähetetään sähköinen selvityspyyntö. Hän voi korjata hakemuksen <em>tai toimittaa riittävän selvityksen</em> tukiehtojen noudattamisesta. Viranomainen voi arvioida selvitykset hallinnollisesti. Ruokavirasto voi antaa tarkempia määräyksiä selvityksen toimittamistavoista.</div></details></li>
-    <li class="proc"><details><summary><span class="lvl">Ruokaviraston menettely</span><span class="ttl">Ohjeet ja koulutusaineistot 2023–2026</span></summary>
+    <li class="proc"><details><summary><span class="lvl">Ruokaviraston menettely</span><span class="ttl">Ohjeet ja koulutusaineistot 2023–2026 [8][9]</span></summary>
       <div class="body">Satelliittiseurannan selvityspyyntöön on vastattava Vipu-mobiililla. Kuvaan tallentuvat sijainti, aika, suunta ja kuvaaja.</div></details></li>
   </ul>
   <div class="callout">
     <strong>Johtopäätös:</strong> kameravaatimus on Ruokaviraston menettelyratkaisu, jolla laissa mainittu riittävä selvitys toteutetaan. Laki tai EU-asetus ei rajaa selvitystä puhelimen kameraan.
   </div>
-  <p class="muted">Viranomaisen omassa peltovalvonnassa tarkastaja saa käyttää apuna myös muuta vastaavantasoista kartta-, satelliitti- ja ilmakuva-aineistoa sekä dronea. Viljelijällä vastaavaa mahdollisuutta ei ole.</p>
+  <p class="muted">Viranomaisen omassa peltovalvonnassa tarkastaja saa käyttää apuna myös muuta vastaavantasoista kartta-, satelliitti- ja ilmakuva-aineistoa sekä dronea [4]. Viljelijällä vastaavaa mahdollisuutta ei ole.</p>
 </section>
 
-<section class="panel" id="data" role="tabpanel">
+<section class="panel" id="data" role="tabpanel" aria-labelledby="tab-data">
   <h2>Täyttääkö satelliittidata 11 artiklan ehdot?</h2>
-  <p class="muted">Ero syntyy saatavuudesta ja syrjimättömyydestä.</p>
+  <p class="muted">Molemmat täyttävät ehdot. Ero syntyy soveltuvuudesta ja kustannuksesta.</p>
   <div class="card scroll" style="padding:8px 12px">
   <table class="tbl">
     <thead><tr><th>Ehto</th><th>HLS (NASA, 30 m)</th><th>PlanetScope (≈3 m)</th><th>Vipu-mobiilin kuva</th></tr></thead>
     <tbody>
       <tr><td>Digitaalinen, automaattisesti käsiteltävä</td><td><span class="pill y">Täyttää</span></td><td><span class="pill y">Täyttää</span></td><td><span class="pill y">Täyttää</span></td></tr>
-      <tr><td>Järjestelmällisesti saatavilla</td><td><span class="pill y">Täyttää</span><br>Avoin, kattaa koko Suomen</td><td><span class="pill n">Ei yksinään</span><br>Lisenssimaksullinen</td><td><span class="pill y">Täyttää</span></td></tr>
-      <tr><td>Syrjimätön</td><td><span class="pill y">Täyttää</span><br>Maksuton kaikille</td><td><span class="pill p">Ehdollisesti</span><br>Vain kansallisella lisenssillä</td><td><span class="pill y">Täyttää</span></td></tr>
-      <tr><td>Soveltuu ehdon toteamiseen</td><td><span class="pill p">Osin</span><br>Pilvisyys kuten Sentinel-2:ssa, pienet lohkot karkeita</td><td><span class="pill y">Hyvin</span><br>Lähes päivittäinen kuvaus</td><td><span class="pill y">Hyvin</span><br>Jos koko lohko niitetty</td></tr>
+      <tr><td>Järjestelmällisesti saatavilla</td><td><span class="pill y">Täyttää</span><br>Avoin, kattaa koko Suomen</td><td><span class="pill y">Täyttää</span><br>Avoimesti saatavilla, maksullinen</td><td><span class="pill y">Täyttää</span></td></tr>
+      <tr><td>Syrjimätön</td><td><span class="pill y">Täyttää</span><br>Maksuton kaikille</td><td><span class="pill y">Täyttää</span><br>Kaikki voivat hankkia samoin ehdoin; kustannus jää hankkijalle</td><td><span class="pill y">Täyttää</span></td></tr>
+      <tr><td>Soveltuu ehdon toteamiseen</td><td><span class="pill p">Rajallisesti</span><br>Sentinel-2 on jo käytössä, joten lisänä on vain Landsat 8/9 [12]</td><td><span class="pill y">Hyvin</span><br>Lähes päivittäinen kuvaus; 3 m erottaa osittaisen niiton</td><td><span class="pill y">Hyvin</span><br>Jos koko lohko on niitetty</td></tr>
     </tbody>
   </table>
   </div>
-  <p style="margin-top:16px">HLS yhdistää Sentinel-2:n ja Landsat 8/9:n samaan aikasarjaan ja tihentää havaintoväliä. PlanetScope on tarkempi, mutta yksittäisen käyttäjän lisenssillä hankittu kuva asettaisi viljelijät eriarvoiseen asemaan.</p>
+  <p style="margin-top:16px">HLS yhdistää Sentinel-2:n ja Landsat 8/9:n harmonisoiduksi 30 metrin aikasarjaksi [12], ja sitä on käytetty kansallisessa niittokartoituksessa [14]. Merkittävimmin havaintoja tihentää PlanetScope. Syrjimättömyyden kannalta ratkaisevaa on, että raportoija ja viranomainen voivat hankkia saman kuvan samalla tunnisteella.</p>
 </section>
 
-<section class="panel" id="prosessi" role="tabpanel">
+<section class="panel" id="prosessi" role="tabpanel" aria-labelledby="tab-prosessi">
   <h2>Ehdotus: porrastettu todentaminen</h2>
-  <p class="muted">Korostetut vaiheet ovat uusia. Asetus (EU) 2022/1173 10 art. 5 kohta sallii porrastetun analyysin.</p>
+  <p class="muted">Korostetut vaiheet ovat uusia. Asetuksen (EU) 2022/1173 10 artiklan 5 kohta sallii porrastetun analyysin [2].</p>
   <div class="card flow">
-  <svg viewBox="0 0 760 730" role="img" aria-label="HLS-haku ennen selvityspyyntöä vähentää turhia pyyntöjä">
+  <svg viewBox="0 0 760 730" role="img" aria-label="Täydentävä haku ennen selvityspyyntöä vähentää turhia pyyntöjä">
     <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>
-    <text x="24" y="34" font-size="15" font-weight="600" fill="var(--ink)">HLS-haku ennen selvityspyyntöä vähentää turhia pyyntöjä</text>
+    <text x="24" y="34" font-size="15" font-weight="600" fill="var(--ink)">Täydentävä haku ennen selvityspyyntöä vähentää turhia pyyntöjä</text>
     <g fill="none" stroke="var(--muted)" stroke-width="1.25">
       <path d="M190 112V146" marker-end="url(#ar)"/><path d="M190 212V252" marker-end="url(#ar)"/>
       <path d="M190 306V341" marker-end="url(#ar)"/><path d="M190 407V453" marker-end="url(#ar)"/>
@@ -212,7 +231,7 @@ footer{border-top:1px solid var(--line);padding:24px 0 40px;font-size:14px;color
       <polygon points="120,375 190,343 260,375 190,407" fill="none" stroke="var(--muted)"/><text x="190" y="379">Niitto näkyy?</text>
       <rect x="70" y="453" width="240" height="44" rx="8" fill="none" stroke="var(--muted)"/><text x="190" y="479">Selvityspyyntö viljelijälle</text>
       <rect x="30" y="553" width="200" height="44" rx="8" fill="none" stroke="var(--muted)"/><text x="130" y="579">Vipu-mobiilin kuva</text>
-      <rect x="265" y="553" width="230" height="44" rx="8" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="2"/><text x="380" y="579" font-weight="600">Niittopäivä + kuvatunnisteet</text>
+      <rect x="265" y="553" width="230" height="44" rx="8" fill="var(--blue-soft)" stroke="var(--blue)" stroke-width="2"/><text x="380" y="579" font-weight="600">Niittoraportti (PlanetScope ym.)</text>
       <rect x="95" y="653" width="320" height="44" rx="8" fill="none" stroke="var(--muted)"/><text x="255" y="679">Käsittelijä arvioi (laki 1334/2022, 21 §)</text>
       <rect x="482" y="206" width="236" height="48" rx="8" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/><text x="600" y="234" font-weight="600">Kunnossa, ei selvityspyyntöä</text>
       <rect x="520" y="653" width="200" height="44" rx="8" fill="none" stroke="var(--muted)"/><text x="620" y="679">Hyväksyntä tai maastokäynti</text>
@@ -224,28 +243,43 @@ footer{border-top:1px solid var(--line);padding:24px 0 40px;font-size:14px;color
   </svg>
   </div>
   <div class="grid g3" style="margin-top:16px">
-    <div class="card"><h3 style="margin-top:0">Jäljitettävyys</h3><p style="margin:0">Jokainen johtopäätös palautuu yksilöityihin kuviin ja avoimesti kuvattuun laskentaan.</p></div>
-    <div class="card"><h3 style="margin-top:0">Sama kohtelu</h3><p style="margin:0">Täydentävä haku ajetaan kaikille epävarmoille lohkoille, ei vain pyytäjille.</p></div>
-    <div class="card"><h3 style="margin-top:0">Validointi</h3><p style="margin:0">HLS-niittotunnistus testataan laadunarvioinnin maastoaineistoa vasten ennen käyttöönottoa.</p></div>
+    <div class="card"><h3 style="margin-top:0">Toistettavuus</h3><p style="margin:0">Raportissa ovat kuvatunnisteet, parametrit ja ohjelmaversio, joten käsittelijä voi laskea tuloksen uudelleen.</p></div>
+    <div class="card"><h3 style="margin-top:0">Sama kohtelu</h3><p style="margin:0">Viranomaisen HLS-haku ajetaan kaikille epävarmoille lohkoille. PlanetScope on kaikkien hankittavissa samoin ehdoin.</p></div>
+    <div class="card"><h3 style="margin-top:0">Validointi</h3><p style="margin:0">Raja-arvot testataan laadunarvioinnin maastoaineistoa vasten ennen käyttöönottoa.</p></div>
   </div>
-  <div class="callout ok"><strong>Ydinajatus:</strong> viljelijä tai neuvoja ei lähetä kuvatiedostoa vaan niittoajan ja kuvien yksilöivät tunnisteet. Viranomainen hakee samat kuvat alkuperäislähteestä, joten muokatun kuvan riskiä ei synny.</div>
 </section>
 
-<section class="panel" id="tyokalu" role="tabpanel">
-  <h2>Niittoraportti-työkalu</h2>
-  <p class="muted">Syötä lohkon havainnot (päivä, lähde, kuvatunniste, NDVI-mediaani). Työkalu etsii suurimman pudotuksen, piirtää aikasarjan ja muodostaa lisätietotekstin Vipu-mobiiliin. Kaikki laskenta tapahtuu selaimessa, mitään ei lähetetä minnekään.</p>
-  <div class="callout">Satelliittiraportti ei nykyisellään korvaa Vipu-mobiilin kuvaa. Ota kuva aina kun mahdollista. Raportin huomioiminen on käsittelijän harkinnassa.</div>
+<section class="panel" id="tyokalu" role="tabpanel" aria-labelledby="tab-tyokalu">
+  <h2>Niittoraportti</h2>
+  <p class="muted">Syötä lohkon havainnot: optisista lähteistä NDVI-mediaani ja pikseliosuudet, Sentinel-1:stä VH-koherenssi. Työkalu ajaa jokaiselle sensorille oman ilmaisimen, yhdistää päällekkäiset tunnistukset ja vertaa varminta tapahtumaa tukiehdon päivämääriin. Laskenta tapahtuu kokonaan selaimessa. Menetelmä ja raja-arvojen lähteet ovat <a href="#menetelma" data-goto="menetelma">Menetelmä</a>-välilehdellä.</p>
+  <div class="callout">Raportti ei nykyisellään korvaa Vipu-mobiilin kuvaa, ja sen huomioiminen on käsittelijän harkinnassa. Ota kuva aina kun mahdollista. Raja-arvoja ei ole kalibroitu Suomen maastoaineistolla.</div>
 
   <div class="card">
     <div class="row r3">
       <div><label for="lohko">Kasvulohkon tunnus</label><input id="lohko" placeholder="esim. 1234567890-1"></div>
-      <div><label for="kasvi">Kasvi / toimenpide</label><input id="kasvi" value="Luonnonhoitonurmi"></div>
-      <div><label for="kynnys">Niittokynnys (NDVI-pudotus)</label><input id="kynnys" type="number" step="0.01" min="0" value="0.15"></div>
+      <div><label for="measure">Kasvi / toimenpide</label><select id="measure"></select></div>
+      <div><label for="buffer">Reunapuskuri (m)</label><input id="buffer" type="number" step="1" min="0" value="10"></div>
     </div>
-    <h3>Havainnot</h3>
+    <p class="small muted" id="ruleNote" style="margin:8px 0 0"></p>
+    <details style="margin-top:12px"><summary><span class="ttl">Raja-arvot</span><span class="muted small">oletukset: De Vroey ym. 2022 ja omat, ks. Menetelmä</span></summary>
+      <div class="body">
+        <div class="row r4">
+          <div><label for="p_ndviDrop">NDVI-pudotus ≥</label><input id="p_ndviDrop" type="number" step="0.01" min="0"></div>
+          <div><label for="p_confMin">Todennäköisyysraja</label><input id="p_confMin" type="number" step="0.05" min="0" max="1"></div>
+          <div><label for="p_minValid">Kelvolliset pikselit ≥ %</label><input id="p_minValid" type="number" step="1" min="0" max="100"></div>
+          <div><label for="p_minChanged">Muuttunut osuus ≥ %</label><input id="p_minChanged" type="number" step="1" min="0" max="100"></div>
+          <div><label for="p_maxGap">Suurin havaintoväli (vrk)</label><input id="p_maxGap" type="number" step="1" min="1"></div>
+          <div><label for="p_persistWindow">Pysyvyysikkuna (vrk)</label><input id="p_persistWindow" type="number" step="1" min="1"></div>
+          <div><label for="p_s1k">S1-kynnys kσ</label><input id="p_s1k" type="number" step="0.1" min="0"></div>
+          <div style="align-self:end"><button class="btn sm" id="resetP" type="button">Palauta oletukset</button></div>
+        </div>
+      </div>
+    </details>
+
+    <h3>Havainnot <span id="exBadge" class="badge-ex" hidden>keksitty esimerkkidata</span></h3>
     <div class="scroll">
     <table class="obs" id="obsTable">
-      <thead><tr><th>Päivä</th><th>Lähde</th><th>Kuvatunniste</th><th>NDVI</th><th><span class="sr">Poista</span></th></tr></thead>
+      <thead><tr><th>Päivä</th><th>Lähde</th><th>Kuvatunniste</th><th>NDVI / koher.</th><th>Kelvolliset %</th><th>Muuttunut %</th><th><span class="sr">Poista</span></th></tr></thead>
       <tbody></tbody>
     </table>
     </div>
@@ -254,17 +288,23 @@ footer{border-top:1px solid var(--line);padding:24px 0 40px;font-size:14px;color
       <button class="btn sm" id="example" type="button">Täytä esimerkkidata</button>
       <button class="btn sm" id="clear" type="button">Tyhjennä</button>
     </div>
-    <details style="margin-top:16px"><summary><span class="ttl">Liitä CSV</span><span class="muted" style="font-size:14px">päivä,lähde,tunniste,ndvi</span></summary>
-      <div class="body"><textarea id="csv" placeholder="2026-08-02,HLS-S30,HLS.S30.T35VLK.2026214T095029.v2.0,0.78"></textarea>
-      <div class="actions"><button class="btn sm" id="importCsv" type="button">Tuo rivit</button></div></div>
+    <details style="margin-top:16px"><summary><span class="ttl">Liitä CSV</span><span class="muted small">päivä; lähde; tunniste; arvo; kelvolliset %; muuttunut %</span></summary>
+      <div class="body">
+        <p class="small muted">Erottimena puolipiste, sarkain tai pilkku. Puolipiste- ja sarkainerotellussa tiedostossa desimaalipilkku on sallittu. Lähteet: <span id="srcList"></span>.</p>
+        <textarea id="csv" placeholder="2026-08-04;PlanetScope;20260804_094512_21_24a4;0,84;100;"></textarea>
+        <div class="actions"><button class="btn sm" id="importCsv" type="button">Tuo rivit</button><span id="csvMsg" class="small muted"></span></div>
+      </div>
     </details>
   </div>
 
-  <div class="card result">
+  <div class="card result" aria-live="polite">
     <h3 style="margin-top:0">Tulos</h3>
-    <div id="verdict" class="muted">Lisää vähintään kaksi havaintoa.</div>
-    <svg id="chart" viewBox="0 0 720 260" role="img" aria-label="NDVI-aikasarja"></svg>
-    <label for="out" style="margin-top:16px">Lisätietoteksti Vipu-mobiiliin</label>
+    <div id="verdict" class="muted">Lisää vähintään kaksi saman lähteen havaintoa.</div>
+    <ul class="checks" id="checks"></ul>
+    <svg id="chart" viewBox="0 0 720 280" role="img" aria-label="Havaintojen aikasarja"></svg>
+    <div class="legend" id="legend"></div>
+    <div id="events"></div>
+    <label for="out" style="margin-top:16px">Lisätietoteksti Vipu-mobiiliin <span id="outLen" class="muted"></span></label>
     <textarea id="out" readonly></textarea>
     <div class="actions">
       <button class="btn primary" id="copy" type="button">Kopioi teksti</button>
@@ -274,170 +314,261 @@ footer{border-top:1px solid var(--line);padding:24px 0 40px;font-size:14px;color
 
   <div class="card result">
     <h3 style="margin-top:0">Hakuohjeet</h3>
-    <p class="muted">Haun aikaväli päivittyy havaintojen mukaan. Lisää lohkon rajaus GeoJSON-muodossa muuttujaan <code>lohko</code>.</p>
+    <p class="muted small">Haun aikaväli päivittyy havaintojen mukaan. Lisää lohkon rajaus (GeoJSON) muuttujaan <code>lohko</code> ja kutista sitä reunapuskurin verran ennen pikselien laskemista.</p>
     <h3>HLS (NASA Earthdata, STAC)</h3>
     <pre id="hlsCode"></pre>
     <h3>PlanetScope (Data API)</h3>
     <pre id="planetCode"></pre>
-    <p class="muted" style="margin-top:12px">Planetin rajapinnat ja tuotenimet muuttuvat; tarkista ajantasaiset tiedot Planetin dokumentaatiosta.</p>
+    <p class="muted small" style="margin-top:12px">Planetin rajapinnat ja tuotenimet muuttuvat, joten tarkista ne Planetin dokumentaatiosta. Sentinel-1-koherenssi saadaan esimerkiksi ESA SNAPilla tai Sen4CAP-järjestelmästä (VH, 6 tai 12 vrk:n pari) [13].</p>
   </div>
 </section>
 
-<section class="panel" id="lahteet" role="tabpanel">
-  <h2>Lähteet</h2>
-  <ul class="src">
-    <li><a href="https://eur-lex.europa.eu/eli/reg_impl/2022/1173/2024-09-08/eng">Komission täytäntöönpanoasetus (EU) 2022/1173, konsolidoitu 8.9.2024</a></li>
-    <li><a href="https://eur-lex.europa.eu/eli/reg_impl/2024/2202/oj/eng">Komission täytäntöönpanoasetus (EU) 2024/2202</a></li>
-    <li><a href="https://eur-lex.europa.eu/eli/reg/2021/2116/oj">Asetus (EU) 2021/2116</a></li>
-    <li><a href="https://faolex.fao.org/docs/pdf/fin225121.pdf">Laki 1334/2022 (alkuperäinen sanamuoto, FAOLEX)</a></li>
-    <li><a href="https://www.ruokavirasto.fi/globalassets/tuet/maatalous/valvonta/peltovalvontaohje.pdf">Ruokavirasto: Peltovalvontaohje 2026</a></li>
-    <li><a href="https://www.ruokavirasto.fi/globalassets/yhteisot/neuvojien-aineistot/10032026_kevaan_2026_selvityspyynnot_ja_syysilmoituksen_muuttaminen_10032026.pdf">Ruokavirasto: Kevään 2026 selvityspyynnöt</a></li>
-    <li><a href="https://www.ruokavirasto.fi/globalassets/yhteisot/neuvojien-aineistot/10032026_kesan_2026_selvityspyynnot.pdf">Ruokavirasto: Kesän 2026 selvityspyynnöt</a></li>
-    <li><a href="https://ruokavirasto.fi/globalassets/tuet/maatalous/peltotuet/satelliittiseurannan_tulokset_kesa_2023__fi.pdf">Ruokavirasto: Satelliittiseuranta kesällä 2023</a></li>
-    <li><a href="https://www.ruokavirasto.fi/globalassets/yhteisot/neuvojien-aineistot/vipu_mobiili_ja_selvityspyynnot_2023_peltotukihakukoulutus_13_3_2023.pdf">Ruokavirasto: Vipu-mobiili ja selvityspyynnöt 2023</a></li>
-    <li><a href="https://maatalous.nivala.fi/wp-content/uploads/2026/05/Kevaan-ja-kesan-satelliittiseuranta-muutosajat-ja-Vipu-mobiili-2026.pdf">Nivala: Satelliittiseuranta ja Vipu-mobiili 2026</a></li>
-    <li><a href="https://maaseutu.fi/wp-content/uploads/2024/05/Vipu-mobiili-ja-satelliittiseurannan-selvityspyynno-2024-Pirkanmaa.pdf">Pirkanmaan ELY: Vipu-mobiili ja selvityspyynnöt 2024</a></li>
-    <li><a href="https://maaseutu.fi/wp-content/uploads/2025/04/Valvonta-Levomaki.pdf">Levomäki: Valvonta 2025</a></li>
-    <li><a href="https://www.cgi.com/fi/fi/asiakasesimerkki/cgi-ruokaviraston-kumppanina-avaruusdatan-hyodyntamisessa">CGI: Ruokavirasto siivittää vihreää maataloutta avaruusdatalla</a></li>
+<section class="panel" id="menetelma" role="tabpanel" aria-labelledby="tab-menetelma">
+  <h2>Menetelmä</h2>
+  <p>Malli seuraa Ruokaviraston satelliittiseurannan rakennetta: lohkon aikasarjoista tunnistetaan tilan muutos, muutoksen pysyvyys varmistetaan ja tulosta verrataan todennäköisyysrajaan [5][6]. Ruokaviraston koneoppimismallia ei ole julkaistu. Tunnistus toteutetaan siksi Sen4CAP-niittoalgoritmilla, joka on avoin ja kehitetty EU:n maksajavirastojen satelliittiseurantaan [13]. Lähteitä on laajennettu HLS:llä [12] ja PlanetScopella.</p>
+  <div class="card scroll" style="padding:8px 12px">
+  <table class="tbl">
+    <thead><tr><th>Vaihe</th><th>Sääntö</th><th>Lähde</th></tr></thead>
+    <tbody>
+      <tr><td>1. Havaintojen karsinta</td><td>Optinen havainto hylätään, jos kelvollisia (pilvettömiä) pikseleitä on alle 50 %. Lohkoa kutistetaan reunapuskurin verran.</td><td>Oma raja; kutistettu lohko [15], vain kokonaan lohkon sisällä olevat pikselit [13]</td></tr>
+      <tr><td>2. Sarjat sensoreittain</td><td>Ilmaisin ajetaan erikseen HLS-, Sentinel-2-, PlanetScope- ja Sentinel-1-sarjoille. HLS S30 ja L30 ovat samaa harmonisoitua sarjaa.</td><td>Harmonisointi [12]; PlanetScopen ja Sentinel-2:n kaistaerot [16]</td></tr>
+      <tr><td>3. Optinen ilmaisin</td><td>NDVI laskee vähintään 0,12 edellisestä saman sensorin pilvettömästä havainnosta, ja väli on enintään 60 vrk.</td><td>Pohjoisten maiden kynnys ja Δt<sub>max</sub> [13]</td></tr>
+      <tr><td>4. Pysyvyys</td><td>Jos seuraava havainto 10 vrk:n sisällä palaa lähelle lähtötasoa, pudotus hylätään pilvenä tai varjona. Jos havaintoa ei ole, luottamusta alennetaan.</td><td>Ruokaviraston periaate [5]; ikkuna oma</td></tr>
+      <tr><td>5. Tutkailmaisin</td><td>VH-koherenssi nousee kuuden edellisen arvon lineaarisovitteen ennusteen yli kσ:lla, k = 5 (CFAR, P<sub>fa</sub> 3·10⁻⁷).</td><td>[13]; koherenssin nousu niiton jälkeen ja sateen vaikutus [17]</td></tr>
+      <tr><td>6. Luottamus</td><td>Optinen 0,5–1 pudotuksen koon mukaan, tutka 0–0,5. Päällekkäiset tunnistukset yhdistetään, ja kukin lisäsensori nostaa luottamusta.</td><td>Asteikko [13]; lisäys oma</td></tr>
+      <tr><td>7. Tapahtumat</td><td>Alle 28 vrk:n päässä toisistaan olevista pidetään varmempi, ja enintään 4 tapahtumaa.</td><td>Δt<sub>min</sub> [13]</td></tr>
+      <tr><td>8. Todennäköisyysraja</td><td>Tapahtuma hyväksytään, kun luottamus on vähintään 0,6. Tutka yksin ei riitä.</td><td>Oma; vrt. status-kohtainen raja [5]</td></tr>
+      <tr><td>9. Tukiehto</td><td>Niittoväli verrataan toimenpiteen päivämääriin, ja muuttuneiden pikselien osuuden on oltava vähintään 90 %.</td><td>Päivämäärät [4]; osuus oma</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <h3>Tunnetut rajoitukset</h3>
+  <ul>
+    <li>Sen4CAP-menetelmän F1 oli parhaimmillaan 76 %, ja laidunnus aiheutti vääriä tunnistuksia [13]. Optisilla aikasarjoilla tavoitettiin 77 % niitoista [15].</li>
+    <li>Luontainen tuleentuminen ja kuivuus laskevat NDVI:tä. Yli 14 vrk:n väli alentaa siksi luottamusta.</li>
+    <li>Sade peittää koherenssin nousun [17].</li>
+    <li>Omia raja-arvoja (merkitty "oma") ei ole kalibroitu Suomen maastoaineistolla. Ne on syytä testata pilotissa.</li>
   </ul>
-  <p class="muted">Lain 1334/2022 pykälät on tarkistettu alkuperäisestä sanamuodosta. Tarkista ajantasainen versio Finlexistä.</p>
+  <p class="muted small">Koodi on tiedostossa <code>core.js</code>, testit hakemistossa <code>test/</code> ja dokumentaatio tiedostossa <code>METHOD.md</code>.</p>
+</section>
+
+<section class="panel" id="lahteet" role="tabpanel" aria-labelledby="tab-lahteet">
+  <h2>Lähteet</h2>
+  <ol class="src">
+    <li>Asetus (EU) 2021/2116. <a href="https://eur-lex.europa.eu/eli/reg/2021/2116/oj">EUR-Lex</a></li>
+    <li>Komission täytäntöönpanoasetus (EU) 2022/1173, konsolidoitu 8.9.2024. <a href="https://eur-lex.europa.eu/eli/reg_impl/2022/1173/2024-09-08/eng">EUR-Lex</a></li>
+    <li>Komission täytäntöönpanoasetus (EU) 2024/2202. <a href="https://eur-lex.europa.eu/eli/reg_impl/2024/2202/oj/eng">EUR-Lex</a></li>
+    <li>Ruokavirasto: Peltovalvontaohje 2026. <a href="https://www.ruokavirasto.fi/globalassets/tuet/maatalous/valvonta/peltovalvontaohje.pdf">PDF</a></li>
+    <li>Ruokavirasto: Kevään 2026 selvityspyynnöt ja syysilmoituksen muuttaminen (satelliittiseurannan statusprosessori). <a href="https://www.ruokavirasto.fi/globalassets/yhteisot/neuvojien-aineistot/10032026_kevaan_2026_selvityspyynnot_ja_syysilmoituksen_muuttaminen_10032026.pdf">PDF</a></li>
+    <li>CGI: Ruokavirasto siivittää vihreää maataloutta avaruusdatalla. <a href="https://www.cgi.com/fi/fi/asiakasesimerkki/cgi-ruokaviraston-kumppanina-avaruusdatan-hyodyntamisessa">cgi.com</a></li>
+    <li>Laki 1334/2022, alkuperäinen sanamuoto. <a href="https://faolex.fao.org/docs/pdf/fin225121.pdf">FAOLEX</a></li>
+    <li>Nivala: Satelliittiseuranta ja Vipu-mobiili 2026 (Ruokaviraston koulutus 10.3.2026). <a href="https://maatalous.nivala.fi/wp-content/uploads/2026/05/Kevaan-ja-kesan-satelliittiseuranta-muutosajat-ja-Vipu-mobiili-2026.pdf">PDF</a></li>
+    <li>Pirkanmaan ELY: Vipu-mobiili ja selvityspyynnöt 2024. <a href="https://maaseutu.fi/wp-content/uploads/2024/05/Vipu-mobiili-ja-satelliittiseurannan-selvityspyynno-2024-Pirkanmaa.pdf">PDF</a></li>
+    <li>Levomäki: Valvonta 2025. <a href="https://maaseutu.fi/wp-content/uploads/2025/04/Valvonta-Levomaki.pdf">PDF</a></li>
+    <li>Ruokavirasto: Satelliittiseuranta kesällä 2023. <a href="https://ruokavirasto.fi/globalassets/tuet/maatalous/peltotuet/satelliittiseurannan_tulokset_kesa_2023__fi.pdf">PDF</a></li>
+    <li>Claverie, M. ym. (2018). The Harmonized Landsat and Sentinel-2 surface reflectance data set. <i>Remote Sensing of Environment</i>. <a href="https://doi.org/10.1016/j.rse.2018.09.002">doi:10.1016/j.rse.2018.09.002</a></li>
+    <li>De Vroey, M. ym. (2022). Mowing detection using Sentinel-1 and Sentinel-2 time series for large scale grassland monitoring. <i>Remote Sensing of Environment</i> 280, 113145. <a href="https://doi.org/10.1016/j.rse.2022.113145">doi:10.1016/j.rse.2022.113145</a></li>
+    <li>Griffiths, P. ym. (2020). Towards national-scale characterization of grassland use intensity from integrated Sentinel-2 and Landsat time series. <i>Remote Sensing of Environment</i>. <a href="https://doi.org/10.1016/j.rse.2019.03.017">doi:10.1016/j.rse.2019.03.017</a></li>
+    <li>Kolecka, N. ym. (2018). Regional scale mapping of grassland mowing frequency with Sentinel-2 time series. <i>Remote Sensing</i> 10(8), 1221. <a href="https://doi.org/10.3390/rs10081221">doi:10.3390/rs10081221</a></li>
+    <li>Baldin, C. M. &amp; Casella, V. M. (2026). Radiometric intercalibration methodologies for high-resolution satellite imagery in precision agriculture. <i>ISPRS Archives</i> XLIX-B1-2026, 231–238. <a href="https://doi.org/10.5194/isprs-archives-XLIX-B1-2026-231-2026">doi:10.5194/isprs-archives-XLIX-B1-2026-231-2026</a></li>
+    <li>Tamm, T. ym. (2016). Relating Sentinel-1 interferometric coherence to mowing events on grasslands. <i>Remote Sensing</i> 8(10), 802. <a href="https://doi.org/10.3390/rs8100802">doi:10.3390/rs8100802</a></li>
+  </ol>
+  <p class="muted small">Lain 1334/2022 pykälät on tarkistettu alkuperäisestä sanamuodosta. Tarkista ajantasainen versio Finlexistä.</p>
 </section>
 
 </main>
 
 <footer>
-  <div class="wrap">Tilanne 1.11.2026. Sivu ei ole Ruokaviraston palvelu eikä oikeudellinen neuvo.</div>
+  <div class="wrap">Tilanne 1.11.2026 · Niittoraportti <span id="ver"></span>. Sivu ei ole Ruokaviraston palvelu eikä oikeudellinen neuvo.</div>
 </footer>
 
+<script src="core.js"></script>
 <script>
 (function(){
-  var root=document.documentElement, tb=document.getElementById('themeBtn');
+  var C=window.NiittoCore, root=document.documentElement;
+  document.getElementById('ver').textContent=C.VERSION;
   function getStore(k){try{return localStorage.getItem(k)}catch(e){return null}}
   function setStore(k,v){try{localStorage.setItem(k,v)}catch(e){}}
   var saved=getStore('theme'); if(saved) root.setAttribute('data-theme',saved);
-  tb.addEventListener('click',function(){
-    var cur=root.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+  document.getElementById('themeBtn').addEventListener('click',function(){
+    var cur=root.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
     var nx=cur==='dark'?'light':'dark'; root.setAttribute('data-theme',nx); setStore('theme',nx); render();
   });
 
-  var tabs=document.querySelectorAll('nav.tabs button');
-  function show(id){
-    tabs.forEach(function(b){b.setAttribute('aria-selected',b.dataset.tab===id?'true':'false')});
+  // Välilehdet + nuolinäppäimet
+  var tabs=Array.prototype.slice.call(document.querySelectorAll('nav.tabs button'));
+  function show(id,focus){
+    tabs.forEach(function(b){var on=b.dataset.tab===id;b.setAttribute('aria-selected',on?'true':'false');b.tabIndex=on?0:-1;if(on&&focus)b.focus()});
     document.querySelectorAll('section.panel').forEach(function(s){s.classList.toggle('active',s.id===id)});
     if(history.replaceState) history.replaceState(null,'','#'+id);
   }
-  tabs.forEach(function(b){b.addEventListener('click',function(){show(b.dataset.tab)})});
-  if(location.hash && document.getElementById(location.hash.slice(1))) show(location.hash.slice(1));
+  tabs.forEach(function(b,i){
+    b.addEventListener('click',function(){show(b.dataset.tab)});
+    b.addEventListener('keydown',function(e){
+      var j=null; if(e.key==='ArrowRight')j=(i+1)%tabs.length; else if(e.key==='ArrowLeft')j=(i-1+tabs.length)%tabs.length; else if(e.key==='Home')j=0; else if(e.key==='End')j=tabs.length-1;
+      if(j!==null){e.preventDefault();show(tabs[j].dataset.tab,true)}
+    });
+  });
+  document.querySelectorAll('[data-goto]').forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();show(a.dataset.goto);window.scrollTo(0,0)})});
+  if(location.hash&&document.getElementById(location.hash.slice(1))) show(location.hash.slice(1));
+
+  // Lomake
+  var measureSel=document.getElementById('measure');
+  Object.keys(C.RULES).forEach(function(k){var o=document.createElement('option');o.textContent=k;measureSel.appendChild(o)});
+  document.getElementById('srcList').textContent=C.SOURCES.join(', ');
+  var PKEYS=['ndviDrop','confMin','minValid','minChanged','maxGap','persistWindow','s1k'];
+  function resetP(){PKEYS.forEach(function(k){document.getElementById('p_'+k).value=C.DEFAULTS[k]});render()}
+  PKEYS.forEach(function(k){var el=document.getElementById('p_'+k);el.value=C.DEFAULTS[k];el.addEventListener('input',render)});
+  document.getElementById('resetP').addEventListener('click',resetP);
 
   var tbody=document.querySelector('#obsTable tbody');
-  var SOURCES=['HLS-S30','HLS-L30','PlanetScope','Sentinel-2','Muu'];
-  function esc(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}
+  function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}
+  function num(v){return v==null||v===''||isNaN(v)?'':v}
   function addRow(d){
     d=d||{};
     var tr=document.createElement('tr');
-    var opts=SOURCES.map(function(s){return '<option'+(s===d.src?' selected':'')+'>'+s+'</option>'}).join('');
-    tr.innerHTML='<td><input type="date" class="d" value="'+esc(d.date||'')+'"></td>'+
-      '<td><select class="s">'+opts+'</select></td>'+
-      '<td><input class="i" placeholder="tunniste" value="'+esc(d.id||'')+'"></td>'+
-      '<td><input class="n" type="number" step="0.01" min="-1" max="1" value="'+(d.ndvi!=null&&!isNaN(d.ndvi)?d.ndvi:'')+'" style="width:90px"></td>'+
+    var opts=C.SOURCES.map(function(s){return '<option'+(s===d.src?' selected':'')+'>'+s+'</option>'}).join('');
+    tr.innerHTML='<td><input type="date" class="d" aria-label="Päivä" value="'+esc(d.date)+'"></td>'+
+      '<td><select class="s" aria-label="Lähde">'+opts+'</select></td>'+
+      '<td><input class="i" aria-label="Kuvatunniste" placeholder="tunniste" value="'+esc(d.id)+'"></td>'+
+      '<td><input class="v num" aria-label="Arvo" type="number" step="0.01" value="'+num(d.value)+'"></td>'+
+      '<td><input class="va num" aria-label="Kelvolliset pikselit %" type="number" step="1" min="0" max="100" value="'+num(d.valid)+'"></td>'+
+      '<td><input class="ch num" aria-label="Muuttunut osuus %" type="number" step="1" min="0" max="100" value="'+num(d.changed)+'"></td>'+
       '<td><button class="del" type="button" aria-label="Poista rivi">×</button></td>';
-    tr.querySelector('.del').addEventListener('click',function(){tr.remove();render()});
-    tr.querySelectorAll('input,select').forEach(function(el){el.addEventListener('input',render)});
+    tr.querySelector('.del').addEventListener('click',function(){tr.remove();exampleOn=false;render()});
+    tr.querySelectorAll('input,select').forEach(function(el){el.addEventListener('input',function(){exampleOn=false;render()})});
     tbody.appendChild(tr);
   }
-  function rows(){
+  function pf(el){var v=el.value;return v===''?null:parseFloat(v)}
+  function readObs(){
     return Array.prototype.map.call(tbody.querySelectorAll('tr'),function(tr){
-      return {date:tr.querySelector('.d').value,src:tr.querySelector('.s').value,id:tr.querySelector('.i').value.trim(),ndvi:parseFloat(tr.querySelector('.n').value)};
-    }).filter(function(r){return r.date && !isNaN(r.ndvi)}).sort(function(a,b){return a.date<b.date?-1:1});
+      return {date:tr.querySelector('.d').value,src:tr.querySelector('.s').value,id:tr.querySelector('.i').value.trim(),
+        value:pf(tr.querySelector('.v')),valid:pf(tr.querySelector('.va')),changed:pf(tr.querySelector('.ch'))};
+    }).filter(function(o){return o.date&&o.value!=null&&!isNaN(o.value)});
   }
-  function fi(d){var p=d.split('-');return (+p[2])+'.'+(+p[1])+'.'+p[0]}
+  function readP(){
+    var p={measure:measureSel.value,bufferM:parseFloat(document.getElementById('buffer').value)||0};
+    PKEYS.forEach(function(k){var v=parseFloat(document.getElementById('p_'+k).value);if(!isNaN(v))p[k]=v});
+    return p;
+  }
   function css(v){return getComputedStyle(root).getPropertyValue(v).trim()}
-  var current=null;
+  var COL={HLS:'--accent',S2:'--blue',PS:'--warn',S1:'--violet'};
+  var NAME={HLS:'HLS',S2:'Sentinel-2',PS:'PlanetScope',S1:'S1-koherenssi'};
+  var current=null, exampleOn=false;
 
   function render(){
-    var rs=rows(), th=parseFloat(document.getElementById('kynnys').value); if(isNaN(th)) th=0.15;
+    var obs=readObs(), p=readP();
     var lohko=document.getElementById('lohko').value.trim()||'[kasvulohkon tunnus]';
-    var kasvi=document.getElementById('kasvi').value.trim();
-    var v=document.getElementById('verdict'), out=document.getElementById('out'), svg=document.getElementById('chart');
-    updateCode(rs);
-    if(rs.length<2){v.className='muted';v.textContent='Lisää vähintään kaksi havaintoa.';out.value='';svg.innerHTML='';current=null;return}
-    var best=null;
-    for(var i=1;i<rs.length;i++){var drop=rs[i-1].ndvi-rs[i].ndvi; if(!best||drop>best.drop) best={i:i,drop:drop}}
-    var found=best.drop>=th, a=rs[best.i-1], b=rs[best.i];
-    current={lohko:lohko,kasvi:kasvi,kynnys:th,niitto_havaittu:found,niittovali:found?{alku:a.date,loppu:b.date}:null,
-      ndvi_ennen:a.ndvi,ndvi_jalkeen:b.ndvi,pudotus:+best.drop.toFixed(3),havainnot:rs,laadittu:new Date().toISOString().slice(0,10),
-      menetelma:'Lohkon NDVI-mediaani pilvimaskatuilta havainnoilta; niitto = suurin pudotus kahden peräkkäisen havainnon välillä, kun pudotus >= kynnys.'};
-    if(found){
-      v.className=''; v.innerHTML='<span class="badge" style="color:var(--accent)">Niitto todennäköinen</span> välillä '+fi(a.date)+'–'+fi(b.date)+'. NDVI laski '+a.ndvi.toFixed(2)+' → '+b.ndvi.toFixed(2)+' (−'+best.drop.toFixed(2)+').';
-      if(a.date.slice(5)>'09-15') v.innerHTML+=' <span style="color:var(--warn)">Huom: niitto vasta 15.9. jälkeen.</span>';
-      else if(b.date.slice(5)>'09-15') v.innerHTML+=' <span style="color:var(--warn)">Huom: väli ulottuu 15.9. yli; niitto on voinut tapahtua myöhässä.</span>';
-      out.value='Niitto todennettu satelliittiaineistosta, kasvulohko '+lohko+(kasvi?' ('+kasvi+')':'')+'. '+
-        'NDVI-mediaani laski '+a.ndvi.toFixed(2)+' → '+b.ndvi.toFixed(2)+' välillä '+fi(a.date)+'–'+fi(b.date)+'. '+
-        'Kuvat: '+a.src+' '+(a.id||'[tunniste]')+' ('+fi(a.date)+') ja '+b.src+' '+(b.id||'[tunniste]')+' ('+fi(b.date)+'). '+
-        'Kuvat ovat haettavissa tunnisteilla alkuperäislähteestä. Täydellinen raportti toimitetaan pyydettäessä.';
-    } else {
-      v.className=''; v.innerHTML='<span class="badge" style="color:var(--bad)">Niittoa ei havaittu</span> – suurin pudotus '+best.drop.toFixed(2)+' (kynnys '+th.toFixed(2)+'). Lisää havaintoja tai ota kuva Vipu-mobiililla.';
-      out.value='';
-    }
-    drawChart(svg,rs,found?best.i:-1);
+    var rule=C.RULES[p.measure];
+    document.getElementById('ruleNote').textContent=rule?rule.note+' Lähde: peltovalvontaohje 2026.':'';
+    document.getElementById('exBadge').hidden=!exampleOn;
+    updateCode(obs);
+    var v=document.getElementById('verdict'), ck=document.getElementById('checks'), ev=document.getElementById('events');
+    var out=document.getElementById('out'), svg=document.getElementById('chart');
+    if(obs.length<2){v.className='muted';v.textContent='Lisää vähintään kaksi saman lähteen havaintoa.';ck.innerHTML='';ev.innerHTML='';out.value='';svg.innerHTML='';document.getElementById('legend').innerHTML='';current=null;setLen();return}
+    var res=C.analyze(obs,p);
+    current={ohjelma:'Niittoraportti',versio:res.version,laadittu:new Date().toISOString().slice(0,10),lohko:lohko,toimenpide:p.measure,
+      tulos:res.verdict,parametrit:res.params,tapahtumat:res.events.map(slimEv),hylatyt_pudotukset:res.rejected.map(function(r){return {lahde:r.fam,alku:r.start,loppu:r.end,pudotus:r.drop,syy:r.reason}}),
+      pois_jatetyt_havainnot:res.excluded.map(function(x){return {havainto:x.obs,syy:x.reason}}),havainnot:res.used.map(function(o){return {paiva:o.date,lahde:o.src,tunniste:o.id,arvo:o.value,kelvolliset:o.valid,muuttunut:o.changed}}),
+      lahteet:['De Vroey ym. 2022, doi:10.1016/j.rse.2022.113145','Claverie ym. 2018, doi:10.1016/j.rse.2018.09.002','Tamm ym. 2016, doi:10.3390/rs8100802','Kolecka ym. 2018, doi:10.3390/rs10081221','Ruokavirasto, peltovalvontaohje 2026']};
+    var vd=res.verdict;
+    v.className='';
+    v.innerHTML='<div class="verdict v-'+vd.level+'">'+esc(vd.label)+'</div><div class="muted small">'+esc(vd.detail)+(res.best?' · paras tapahtuma '+C.fi(res.best.start)+'–'+C.fi(res.best.end)+', luottamus '+res.best.conf+' ('+res.best.fams.map(function(f){return NAME[f]}).join(' + ')+')':'')+'</div>';
+    ck.innerHTML=res.best?res.best.checks.map(function(c){return '<li class="'+c.s+'">'+esc(c.t)+'</li>'}).join(''):'';
+    res.excluded.forEach(function(x){ck.innerHTML+='<li class="warn">Havainto '+esc(x.obs.date)+' ('+esc(x.obs.src)+') jätettiin pois: '+esc(x.reason)+'</li>'});
+    var h='';
+    if(res.events.length){h+='<h3>Tunnistetut tapahtumat</h3>';res.events.forEach(function(e){
+      h+='<div class="ev'+(e.accepted?' acc':'')+'"><strong>'+C.fi(e.start)+'–'+C.fi(e.end)+'</strong> · luottamus '+e.conf+' · '+e.fams.map(function(f){return NAME[f]}).join(' + ')+' · '+(e.accepted?'<span style="color:var(--accent)">ylittää rajan</span>':'<span class="muted">alle rajan</span>')+
+      '<div class="muted small">'+e.dets.map(function(d){return NAME[d.fam]+': '+(d.fam==='S1'?'z = '+d.z:'NDVI '+d.before.value.toFixed(2)+' → '+d.after.value.toFixed(2)+', pysyvyys: '+d.persistence)}).join(' · ')+'</div></div>'})}
+    if(res.rejected.length){h+='<h3>Hylätyt pudotukset</h3>';res.rejected.forEach(function(r){h+='<div class="ev"><strong>'+C.fi(r.start)+'–'+C.fi(r.end)+'</strong> · '+NAME[r.fam]+' · pudotus '+r.drop+'<div class="muted small">'+esc(r.reason)+'</div></div>'})}
+    ev.innerHTML=h;
+    out.value=C.reportText(res,lohko,p.measure);
+    setLen();
+    drawChart(svg,res);
   }
+  function slimEv(e){return {alku:e.start,loppu:e.end,luottamus:e.conf,hyvaksytty:e.accepted,lahteet:e.fams,tarkistukset:e.checks,
+    tunnistukset:e.dets.map(function(d){return {lahde:d.fam,alku:d.start,loppu:d.end,ennen:{paiva:d.before.date,tunniste:d.before.id,arvo:d.before.value},jalkeen:{paiva:d.after.date,tunniste:d.after.id,arvo:d.after.value},pudotus:d.drop,z:d.z,pysyvyys:d.persistence,muuttunut:d.changed,luottamus:Math.round(d.conf*100)/100}})}}
+  function setLen(){var o=document.getElementById('out');document.getElementById('outLen').textContent=o.value?'('+o.value.length+' merkkiä)':'';document.getElementById('copy').disabled=!o.value;document.getElementById('dlJson').disabled=!current}
 
-  function drawChart(svg,rs,hi){
-    var W=720,H=260,L=44,R=16,T=16,B=36;
+  function drawChart(svg,res){
+    var W=720,H=280,L=48,R=48,T=28,B=40, used=res.used;
+    if(!used.length){svg.innerHTML='';return}
     var t=function(d){return Date.parse(d)/864e5};
-    var x0=t(rs[0].date),x1=t(rs[rs.length-1].date); if(x1===x0)x1=x0+1;
+    var x0=t(used[0].date),x1=t(used[used.length-1].date); if(x1===x0)x1=x0+1;
     var X=function(d){return L+(t(d)-x0)/(x1-x0)*(W-L-R)}, Y=function(v){return T+(1-Math.max(0,Math.min(1,v)))*(H-T-B)};
-    var ink=css('--ink'),mut=css('--muted'),line=css('--line'),acc=css('--accent'),warn=css('--warn');
+    var mut=css('--muted'),line=css('--line'),acc=css('--accent');
     var s='';
-    [0,0.25,0.5,0.75,1].forEach(function(v){s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(v)+'" y2="'+Y(v)+'" stroke="'+line+'"/><text x="'+(L-8)+'" y="'+(Y(v)+4)+'" text-anchor="end" font-size="11" fill="'+mut+'">'+v.toFixed(2)+'</text>'});
-    if(hi>0){var xa=X(rs[hi-1].date),xb=X(rs[hi].date);s+='<rect x="'+xa+'" y="'+T+'" width="'+Math.max(2,xb-xa)+'" height="'+(H-T-B)+'" fill="'+acc+'" fill-opacity="0.12"/>'}
-    var pts=rs.map(function(r){return X(r.date)+','+Y(r.ndvi)}).join(' ');
-    s+='<polyline points="'+pts+'" fill="none" stroke="'+ink+'" stroke-width="1.5"/>';
-    rs.forEach(function(r){var c=r.src==='PlanetScope'?warn:acc;s+='<circle cx="'+X(r.date)+'" cy="'+Y(r.ndvi)+'" r="4.5" fill="'+c+'"><title>'+fi(r.date)+' '+esc(r.src)+' NDVI '+r.ndvi+'</title></circle>'});
-    s+='<text x="'+L+'" y="'+(H-10)+'" font-size="11" fill="'+mut+'">'+fi(rs[0].date)+'</text><text x="'+(W-R)+'" y="'+(H-10)+'" text-anchor="end" font-size="11" fill="'+mut+'">'+fi(rs[rs.length-1].date)+'</text>';
-    s+='<circle cx="'+(W/2-70)+'" cy="'+(H-14)+'" r="4" fill="'+acc+'"/><text x="'+(W/2-62)+'" y="'+(H-10)+'" font-size="11" fill="'+mut+'">HLS / Sentinel</text><circle cx="'+(W/2+40)+'" cy="'+(H-14)+'" r="4" fill="'+warn+'"/><text x="'+(W/2+48)+'" y="'+(H-10)+'" font-size="11" fill="'+mut+'">PlanetScope</text>';
+    [0,0.25,0.5,0.75,1].forEach(function(v){s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(v)+'" y2="'+Y(v)+'" stroke="'+line+'"/><text x="'+(L-8)+'" y="'+(Y(v)+4)+'" text-anchor="end" font-size="13" fill="'+mut+'">'+v.toFixed(2)+'</text>'});
+    s+='<text x="'+(L-8)+'" y="'+(T-12)+'" text-anchor="end" font-size="12" fill="'+mut+'">NDVI</text>';
+    if(used.some(function(o){return o.fam==='S1'}))s+='<text x="'+(W-R+8)+'" y="'+(T-12)+'" font-size="12" fill="'+css('--violet')+'">koher.</text>';
+    res.events.forEach(function(e){var xa=X(e.start),xb=X(e.end);s+='<rect x="'+xa+'" y="'+T+'" width="'+Math.max(3,xb-xa)+'" height="'+(H-T-B)+'" fill="'+acc+'" fill-opacity="'+(e.accepted?0.16:0.06)+'"><title>'+C.fi(e.start)+'–'+C.fi(e.end)+' luottamus '+e.conf+'</title></rect>'});
+    var fams={}; used.forEach(function(o){(fams[o.fam]=fams[o.fam]||[]).push(o)});
+    Object.keys(fams).forEach(function(f){
+      var c=css(COL[f]), pts=fams[f].map(function(o){return X(o.date)+','+Y(o.value)}).join(' ');
+      s+='<polyline points="'+pts+'" fill="none" stroke="'+c+'" stroke-width="1.5"'+(f==='S1'?' stroke-dasharray="4 3"':'')+'/>';
+      fams[f].forEach(function(o){s+='<circle cx="'+X(o.date)+'" cy="'+Y(o.value)+'" r="4.5" fill="'+c+'"><title>'+C.fi(o.date)+' '+esc(o.src)+' '+o.value+(o.id?' · '+esc(o.id):'')+'</title></circle>'});
+    });
+    s+='<text x="'+L+'" y="'+(H-14)+'" font-size="13" fill="'+mut+'">'+C.fi(used[0].date)+'</text><text x="'+(W-R)+'" y="'+(H-14)+'" text-anchor="end" font-size="13" fill="'+mut+'">'+C.fi(used[used.length-1].date)+'</text>';
     svg.innerHTML=s;
+    document.getElementById('legend').innerHTML=Object.keys(fams).map(function(f){return '<span><i style="background:var('+COL[f]+')"></i>'+NAME[f]+'</span>'}).join('')+'<span><i style="background:var(--accent);opacity:.35;border-radius:2px"></i>tunnistettu niittoväli</span>';
   }
 
-  function updateCode(rs){
-    var a=rs.length?rs[0].date:'2026-08-01', b=rs.length?rs[rs.length-1].date:'2026-09-15';
+  function updateCode(obs){
+    var a=obs.length?obs.map(function(o){return o.date}).sort()[0]:'2026-07-15', b=obs.length?obs.map(function(o){return o.date}).sort().pop():'2026-09-15';
     document.getElementById('hlsCode').textContent=
-'# pip install pystac-client  (Earthdata-tunnus: urs.earthdata.nasa.gov)\nfrom pystac_client import Client\ncat = Client.open("https://cmr.earthdata.nasa.gov/stac/LPCLOUD")\nitems = cat.search(\n    collections=["HLSS30_2.0", "HLSL30_2.0"],\n    intersects=lohko,              # lohkon GeoJSON-geometria\n    datetime="'+a+'/'+b+'",\n).item_collection()\n# S30: B04 (red), B8A (NIR) · L30: B04, B05 · pilvet: Fmask\nfor it in items:\n    print(it.id, it.datetime.date())   # it.id = kuvatunniste raporttiin';
+'# pip install pystac-client rioxarray  (Earthdata-tunnus: urs.earthdata.nasa.gov)\nfrom pystac_client import Client\ncat = Client.open("https://cmr.earthdata.nasa.gov/stac/LPCLOUD")\nitems = cat.search(\n    collections=["HLSS30_2.0", "HLSL30_2.0"],\n    intersects=lohko,              # lohkon GeoJSON, kutistettu puskurilla\n    datetime="'+a+'/'+b+'",\n).item_collection()\n# NDVI: S30 (B8A-B04)/(B8A+B04), L30 (B05-B04)/(B05+B04)\n# Fmask: hylkää pilvi, varjo, lumi ja korkea aerosoli → kelvolliset %\n# Muuttunut % = osuus pikseleistä, joissa NDVI laski ≥ 0,12 edellisestä\nfor it in items:\n    print(it.id, it.datetime.date())   # it.id = kuvatunniste raporttiin';
     document.getElementById('planetCode').textContent=
-'POST https://api.planet.com/data/v1/quick-search\n{\n  "item_types": ["PSScene"],\n  "filter": {"type": "AndFilter", "config": [\n    {"type": "GeometryFilter", "field_name": "geometry", "config": <lohko>},\n    {"type": "DateRangeFilter", "field_name": "acquired",\n     "config": {"gte": "'+a+'T00:00:00Z", "lte": "'+b+'T23:59:59Z"}},\n    {"type": "RangeFilter", "field_name": "cloud_cover", "config": {"lte": 0.3}}\n  ]}\n}\n# Tilaus: Orders API, tuote ortho_analytic_8b_sr, työkalut clip + harmonize\n# Kuvatunniste raporttiin = item id';
+'POST https://api.planet.com/data/v1/quick-search\n{\n  "item_types": ["PSScene"],\n  "filter": {"type": "AndFilter", "config": [\n    {"type": "GeometryFilter", "field_name": "geometry", "config": <lohko>},\n    {"type": "DateRangeFilter", "field_name": "acquired",\n     "config": {"gte": "'+a+'T00:00:00Z", "lte": "'+b+'T23:59:59Z"}},\n    {"type": "RangeFilter", "field_name": "cloud_cover", "config": {"lte": 0.5}}\n  ]}\n}\n# Tilaus: Orders API, ortho_analytic_8b_sr + ortho_udm2, työkalut clip + harmonize\n# Kelvolliset % = UDM2 clear -kaistan osuus lohkolla\n# Kuvatunniste raporttiin = item id';
   }
 
   document.getElementById('addRow').addEventListener('click',function(){addRow()});
-  document.getElementById('clear').addEventListener('click',function(){tbody.innerHTML='';render()});
+  document.getElementById('clear').addEventListener('click',function(){tbody.innerHTML='';exampleOn=false;render()});
   document.getElementById('example').addEventListener('click',function(){
     tbody.innerHTML='';
-    [{date:'2026-07-20',src:'HLS-S30',id:'HLS.S30.T35VLK.2026201T094031.v2.0',ndvi:0.79},
-     {date:'2026-07-28',src:'HLS-L30',id:'HLS.L30.T35VLK.2026209T093522.v2.0',ndvi:0.81},
-     {date:'2026-08-04',src:'PlanetScope',id:'20260804_094512_21_24a4',ndvi:0.80},
-     {date:'2026-08-11',src:'PlanetScope',id:'20260811_093958_44_24c1',ndvi:0.52},
-     {date:'2026-08-19',src:'HLS-S30',id:'HLS.S30.T35VLK.2026231T094029.v2.0',ndvi:0.47}].forEach(addRow);
+    // KEKSITTY esimerkkidata. Tunnisteiden muoto vastaa oikeita, sisältö ei.
+    [{date:'2026-07-14',src:'HLS-S30',id:'HLS.S30.T34VEP.2026195T094031.v2.0',value:0.78,valid:96},
+     {date:'2026-07-23',src:'HLS-L30',id:'HLS.L30.T34VEP.2026204T093522.v2.0',value:0.80,valid:88},
+     {date:'2026-07-29',src:'PlanetScope',id:'20260729_093411_07_24b6',value:0.83,valid:100},
+     {date:'2026-08-04',src:'PlanetScope',id:'20260804_094512_21_24a4',value:0.84,valid:97},
+     {date:'2026-08-06',src:'HLS-S30',id:'HLS.S30.T34VEP.2026218T094029.v2.0',value:0.55,valid:35},
+     {date:'2026-08-11',src:'PlanetScope',id:'20260811_093958_44_24c1',value:0.51,valid:98,changed:96},
+     {date:'2026-08-13',src:'HLS-S30',id:'HLS.S30.T34VEP.2026225T094031.v2.0',value:0.50,valid:91,changed:94},
+     {date:'2026-08-16',src:'PlanetScope',id:'20260816_094102_12_24a4',value:0.55,valid:99},
+     {date:'2026-07-20',src:'Sentinel-1 koherenssi',id:'S1A VH 0714–0726',value:0.21},
+     {date:'2026-07-26',src:'Sentinel-1 koherenssi',id:'S1C VH 0720–0726',value:0.19},
+     {date:'2026-08-01',src:'Sentinel-1 koherenssi',id:'S1A VH 0726–0801',value:0.20},
+     {date:'2026-08-07',src:'Sentinel-1 koherenssi',id:'S1C VH 0801–0807',value:0.22},
+     {date:'2026-08-13',src:'Sentinel-1 koherenssi',id:'S1A VH 0807–0813',value:0.52}
+    ].forEach(addRow);
     if(!document.getElementById('lohko').value) document.getElementById('lohko').value='ESIMERKKI-1';
-    render();
+    exampleOn=true; render();
   });
   document.getElementById('importCsv').addEventListener('click',function(){
-    document.getElementById('csv').value.split(/\r?\n/).forEach(function(l){
-      var p=l.split(/[;\t]|,(?=\S)/).map(function(s){return s.trim()});
-      if(p.length>=4 && /^\d{4}-\d{2}-\d{2}$/.test(p[0])) addRow({date:p[0],src:SOURCES.indexOf(p[1])>=0?p[1]:'Muu',id:p[2],ndvi:parseFloat(p[3].replace(',','.'))});
+    var lines=document.getElementById('csv').value.split(/\r?\n/), ok=0, bad=0;
+    lines.forEach(function(l){
+      if(!l.trim()) return;
+      var sep=l.indexOf(';')>=0?';':(l.indexOf('\t')>=0?'\t':',');
+      var p=l.split(sep).map(function(s){return s.trim()});
+      var f=function(x){if(x==null||x==='')return null;var n=parseFloat(sep===','?x:x.replace(',','.'));return isNaN(n)?null:n};
+      if(p.length>=4&&/^\d{4}-\d{2}-\d{2}$/.test(p[0])&&C.SOURCES.indexOf(p[1])>=0&&f(p[3])!=null){addRow({date:p[0],src:p[1],id:p[2],value:f(p[3]),valid:f(p[4]),changed:f(p[5])});ok++}
+      else bad++;
     });
-    render();
+    document.getElementById('csvMsg').textContent=ok+' riviä tuotu'+(bad?', '+bad+' ohitettu (tarkista päivä, lähde ja arvo)':'');
+    exampleOn=false; render();
   });
-  ['lohko','kasvi','kynnys'].forEach(function(id){document.getElementById(id).addEventListener('input',render)});
+  ['lohko','buffer'].forEach(function(id){document.getElementById(id).addEventListener('input',render)});
+  measureSel.addEventListener('change',render);
   document.getElementById('copy').addEventListener('click',function(){
     var o=document.getElementById('out'); if(!o.value) return;
-    var btn=this; var done=function(){btn.textContent='Kopioitu';setTimeout(function(){btn.textContent='Kopioi teksti'},1500)};
-    var fallback=function(){o.select();try{document.execCommand('copy')}catch(e){}done()};
-    if(navigator.clipboard) navigator.clipboard.writeText(o.value).then(done,fallback); else fallback();
+    var btn=this, done=function(){btn.textContent='Kopioitu';setTimeout(function(){btn.textContent='Kopioi teksti'},1500)};
+    var fb=function(){o.select();try{document.execCommand('copy')}catch(e){}done()};
+    if(navigator.clipboard) navigator.clipboard.writeText(o.value).then(done,fb); else fb();
   });
   document.getElementById('dlJson').addEventListener('click',function(){
     if(!current) return;
     var blob=new Blob([JSON.stringify(current,null,2)],{type:'application/json'});
     var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-    a.download='niittoraportti_'+(current.lohko||'lohko').replace(/[^\w-]/g,'_')+'.json'; a.click();
+    a.download='niittoraportti_'+String(current.lohko).replace(/[^\w-]/g,'_')+'.json'; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function(){URL.revokeObjectURL(a.href)},1000);
   });
   addRow(); addRow(); render();
