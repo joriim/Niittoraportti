@@ -6,6 +6,7 @@
 <title>Niittoraportti</title>
 <meta name="description" content="Kun satelliitti ei näe niittoa: oikeusperusta, ehdotettu prosessi ja Sen4CAP-tyyppinen niiton tunnistus HLS-, Sentinel- ja PlanetScope-havainnoista.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -93,6 +94,8 @@ label.chk input{width:auto}
 progress{width:100%;height:8px;margin-top:12px;accent-color:var(--accent)}
 #geo{min-height:96px}
 [hidden]{display:none!important}
+#map{height:380px;border-radius:10px;border:1px solid var(--line);margin-top:12px;z-index:0}
+#pltList{margin-top:8px}
 @media(min-width:640px){.row.r3{grid-template-columns:repeat(3,1fr)}.row.r4{grid-template-columns:repeat(4,1fr)}}
 .btn{display:inline-flex;align-items:center;gap:6px;font:600 14px Inter,sans-serif;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:9px 14px;cursor:pointer}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -262,7 +265,7 @@ footer{border-top:1px solid var(--line);padding:24px 0 40px;font-size:14px;color
 
 <section class="panel" id="tyokalu" role="tabpanel" aria-labelledby="tab-tyokalu">
   <h2>Niittoraportti</h2>
-  <p class="muted">Hae lohkon havainnot satelliittikuvista tai syötä ne itse: optisista lähteistä NDVI-mediaani ja pikseliosuudet, Sentinel-1:stä VH-koherenssi. Työkalu ajaa jokaiselle sensorille oman ilmaisimen, yhdistää päällekkäiset tunnistukset ja vertaa varminta tapahtumaa tukiehdon päivämääriin. Kaikki laskenta tapahtuu selaimessa. Vain datahaussa lohkon rajaus lähetetään hakupalveluun. Menetelmä ja raja-arvojen lähteet ovat <a href="#menetelma" data-goto="menetelma">Menetelmä</a>-välilehdellä.</p>
+  <p class="muted">Hae lohkon havainnot satelliittikuvista tai syötä ne itse: optisista lähteistä NDVI-mediaani ja pikseliosuudet, Sentinel-1:stä VH-koherenssi. Työkalu ajaa jokaiselle sensorille oman ilmaisimen, yhdistää päällekkäiset tunnistukset ja vertaa varminta tapahtumaa tukiehdon päivämääriin. Kaikki laskenta tapahtuu selaimessa. Vain lohkon valinnassa ja datahaussa tietoa lähetetään palveluihin: tunnus tai klikkauspiste Ruokavirastolle, karttatiilien pyynnöt MML:lle tai OpenStreetMapille ja lohkon rajaus satelliittikuvapalveluun. Menetelmä ja raja-arvojen lähteet ovat <a href="#menetelma" data-goto="menetelma">Menetelmä</a>-välilehdellä.</p>
   <div class="callout">Raportti ei nykyisellään korvaa Vipu-mobiilin kuvaa, ja sen huomioiminen on käsittelijän harkinnassa. Ota kuva aina kun mahdollista. Raja-arvoja ei ole kalibroitu Suomen maastoaineistolla.</div>
 
   <div class="card">
@@ -289,6 +292,32 @@ footer{border-top:1px solid var(--line);padding:24px 0 40px;font-size:14px;color
 
     <h3 id="haku">Hae havainnot satelliittikuvista</h3>
     <p class="small muted" style="margin-top:0">Työkalu hakee lohkolle HLS-kuvat ilman tunnusta ja PlanetScope-kuvat Planet-API-avaimella. Jokaisesta kuvasta lasketaan NDVI-mediaani sekä kelvollisten ja muuttuneiden pikselien osuudet, ja tulokset lisätään havaintotaulukkoon. Haussa lohkon rajaus lähetetään hakupalveluun, mutta pikselit lasketaan selaimessa. Katso <a href="#tunnukset" id="toCreds">tunnusten hankinta ja syöttäminen</a>.</p>
+    <div class="srcbox" style="margin-bottom:12px">
+      <div><strong>Lohkon valinta</strong> <span class="muted small">peruslohkotunnuksella tai kartalta · Ruokaviraston kasvulohkot, taustakartta MML</span></div>
+      <div class="row r2" style="margin-top:8px">
+        <div>
+          <label for="pltIn">Peruslohkotunnus (kasvulohkon kanssa muodossa 1641431471-2)</label>
+          <div class="actions" style="margin-top:0"><input id="pltIn" inputmode="numeric" autocomplete="off" placeholder="esim. 1641431471" style="flex:1;min-width:160px;width:auto"><button class="btn sm primary" id="pltGo" type="button">Hae rajaus</button></div>
+        </div>
+        <div style="align-self:end"><button class="btn sm" id="mapOpen" type="button" aria-expanded="false" aria-controls="mapWrap">Valitse kartalta</button></div>
+      </div>
+      <div id="pltList" class="actions" hidden></div>
+      <div id="pickMsg" class="small muted" style="margin-top:8px" aria-live="polite"></div>
+      <div id="mapWrap" hidden>
+        <div class="row r3" style="margin-top:12px">
+          <div><label for="mapBase">Taustakartta</label><select id="mapBase"></select></div>
+          <div><label for="mmlKey">MML-API-avain</label><input id="mmlKey" type="password" autocomplete="off" spellcheck="false" placeholder="ilman avainta OpenStreetMap"></div>
+          <div style="align-self:end"><label class="chk"><input type="checkbox" id="mmlRemember"> Muista tällä selaimella</label></div>
+        </div>
+        <div id="map" role="application" aria-label="Kartta lohkon valintaan"></div>
+        <div class="actions">
+          <button class="btn sm" id="drawBtn" type="button">Piirrä rajaus itse</button>
+          <button class="btn sm primary" id="drawDone" type="button" hidden>Valmis</button>
+          <button class="btn sm" id="drawCancel" type="button" hidden>Peru</button>
+          <span class="small muted" id="mapHint">Lähennä ja klikkaa kasvulohkoa.</span>
+        </div>
+      </div>
+    </div>
     <div class="row r2">
       <div>
         <label for="geo">Lohkon rajaus (GeoJSON, WGS84 tai ETRS-TM35FIN)</label>
@@ -331,7 +360,19 @@ footer{border-top:1px solid var(--line);padding:24px 0 40px;font-size:14px;color
 
     <details id="tunnukset" style="margin-top:16px"><summary><span class="ttl">Tunnukset ja ohjeet</span><span class="muted small">HLS ilman tunnusta, NASA Earthdata ja Planet-API-avain</span></summary>
       <div class="body">
-        <h3 style="margin-top:4px">HLS tässä sovelluksessa: ei tunnusta</h3>
+        <h3 style="margin-top:4px">Lohkon valinta ja MML-API-avain</h3>
+        <p class="small">Lohkon rajauksen saa kolmella tavalla. <strong>Peruslohkotunnuksella</strong> sovellus hakee peruslohkon kasvulohkot Ruokaviraston avoimesta INSPIRE-rajapinnasta, ja jos niitä on useita, valitset niitettävän. <strong>Kartalta</strong> lohkon voi valita klikkaamalla: lähennä, kunnes kasvulohkot näkyvät, ja klikkaa lohkoa. <strong>Piirtämällä</strong> rajauksen voi tehdä itse klikkaamalla lohkon kulmat. Kasvulohkoaineisto on Ruokaviraston (CC BY 4.0), ja uusin julkaistu vuosi valitaan automaattisesti.</p>
+        <p class="small">Maanmittauslaitoksen taustakartat ja ortokuvat vaativat maksuttoman API-avaimen. Ilman avainta kartta näytetään OpenStreetMapin pohjalla.</p>
+        <ol class="small">
+          <li>Rekisteröidy MML:n <a href="https://omatili.maanmittauslaitos.fi/" rel="noopener">Oma tili</a> -palveluun ja valitse avoimet rajapintapalvelut.</li>
+          <li>Kirjaudu sisään ja luo uusi API-avain. Ohje: <a href="https://www.maanmittauslaitos.fi/rajapinnat/api-avaimen-ohje" rel="noopener">MML:n API-avaimen ohje</a>.</li>
+          <li>Liitä avain kenttään <em>MML-API-avain</em> (näkyy, kun avaat kartan). Valinnalla <em>Muista tällä selaimella</em> avain tallentuu tämän selaimen muistiin (localStorage). Avain lähetetään vain MML:n karttapalveluun karttakuvien mukana.</li>
+        </ol>
+        <p class="small muted">Jos Ruokaviraston rajapinta ei salli hakua selaimesta, hae rajaus skriptillä:</p>
+        <pre>pip install geopandas pyogrio requests
+python scripts/hae_kasvulohkot.py --peruslohko 1641431471 --vuodet 2025</pre>
+        <p class="small muted">Skripti lataa Ruokaviraston avoimen kasvulohkoaineiston ja kirjoittaa jokaisesta kasvulohkosta tiedoston <code>lohko_&lt;tunnus&gt;.geojson</code>, jonka voi avata yllä painikkeella <em>Avaa tiedosto</em>.</p>
+        <h3 style="margin-top:20px">HLS tässä sovelluksessa: ei tunnusta</h3>
         <p class="small">Sovellus hakee NASAn HLS v2.0 -aineiston Microsoftin Planetary Computerista. Siellä aineisto on avoimesti saatavilla, ja selain pyytää lyhytaikaisen lukuoikeuden (SAS-token) automaattisesti. Riittää, että liität lohkon rajauksen, valitset aikavälin ja painat <em>Hae HLS-havainnot</em>.</p>
         <h3>HLS suoraan NASAlta: Earthdata-tunnus (vain skripti)</h3>
         <p class="small">NASAn omaa latauspalvelua ei voi käyttää suoraan selaimesta, koska se ohjaa kirjautumiseen toiseen osoitteeseen. Jos Planetary Computerista puuttuu kuvia tai haluat käyttää alkuperäislähdettä, käytä skriptiä <code>scripts/hae_havainnot.py</code>.</p>
@@ -465,6 +506,8 @@ python scripts/hae_havainnot.py --lohko lohko.geojson --alku 2026-05-01 --loppu 
 <script src="core.js"></script>
 <script src="vendor/geotiff.js"></script>
 <script src="datahaku.js"></script>
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="kartta.js"></script>
 <script>
 (function(){
   var C=window.NiittoCore, root=document.documentElement;
@@ -686,6 +729,7 @@ python scripts/hae_havainnot.py --lohko lohko.geojson --alku 2026-05-01 --loppu 
       geoMsg.style.color='';
       var pr=fieldState.properties||{}, tun=pr.tunnus||pr.kasvulohko||pr.KASVULOHKOTUNNUS||pr.id||pr.ID;
       var lo=document.getElementById('lohko'); if(tun&&!lo.value){lo.value=tun;render()}
+      if(mapCtl) mapCtl.show({type:'Feature',properties:{},geometry:fieldState.geometry});
     }catch(e){geoMsg.textContent='Rajausta ei voitu lukea: '+e.message;geoMsg.style.color='var(--bad)'}
   }
   geoEl.addEventListener('input',parseGeo);
@@ -693,6 +737,65 @@ python scripts/hae_havainnot.py --lohko lohko.geojson --alku 2026-05-01 --loppu 
     var f=this.files&&this.files[0]; if(!f) return;
     var r=new FileReader(); r.onload=function(){geoEl.value=String(r.result);parseGeo()}; r.readAsText(f);
   });
+
+  // ---------- Lohkon valinta: peruslohkotunnus ja kartta (kartta.js) ----------
+  var KT=window.NiittoKartta, mapCtl=null;
+  var pickMsg=document.getElementById('pickMsg'), pltList=document.getElementById('pltList');
+  function pickSay(t,cls){pickMsg.textContent=t;pickMsg.style.color=cls==='fail'?'var(--bad)':cls==='warn'?'var(--warn)':''}
+  function applyParcel(p){
+    geoEl.value=JSON.stringify(p.feature); parseGeo();
+    if(p.tunnus) document.getElementById('lohko').value=p.tunnus;
+    if(p.measure&&C.RULES[p.measure]) measureSel.value=p.measure;
+    render();
+    if(mapCtl) mapCtl.show(p.feature);
+    pickSay('Valittu '+(p.kind==='peruslohko'?'peruslohko ':'kasvulohko ')+(p.tunnus||'')+(p.kasvi?' · '+p.kasvi:'')+(fieldState?' · '+fx(fieldState.areaM2/1e4,2)+' ha':'')+(p.year?' · '+p.year:'')+'.'+
+      (p.kind==='peruslohko'?' Kasvulohkoja ei löytynyt, joten rajaus on koko peruslohko. Tarkista, että se vastaa niitettävää alaa.':''),'ok');
+  }
+  document.getElementById('pltGo').addEventListener('click',async function(){
+    var btn=this; btn.disabled=true; pltList.hidden=true; pltList.innerHTML=''; pickSay('Haetaan lohkoa…');
+    try{
+      var y=parseInt((document.getElementById('dStart').value||'').slice(0,4),10)||new Date().getFullYear();
+      var r=await KT.findByTunnus(document.getElementById('pltIn').value,{year:y});
+      if(r.parcels.length===1){applyParcel(r.parcels[0])}
+      else{
+        pickSay('Peruslohkolla on '+r.parcels.length+' kasvulohkoa vuonna '+r.year+'. Valitse niitettävä lohko:');
+        r.parcels.forEach(function(p){
+          var b=document.createElement('button'); b.type='button'; b.className='btn sm';
+          b.textContent=(p.tunnus||'?')+(p.kasvi?' · '+p.kasvi:'')+' · '+fx(p.ha,2)+' ha';
+          b.addEventListener('click',function(){pltList.hidden=true;applyParcel(p)}); pltList.appendChild(b);
+        });
+        pltList.hidden=false;
+        if(mapCtl) mapCtl.show({type:'FeatureCollection',features:r.parcels.map(function(p){return p.feature})});
+      }
+    }catch(e){pickSay(e.message,'fail')}
+    btn.disabled=false;
+  });
+  document.getElementById('pltIn').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();document.getElementById('pltGo').click()}});
+
+  var baseSel=document.getElementById('mapBase'), mmlKeyEl=document.getElementById('mmlKey'), mmlRem=document.getElementById('mmlRemember');
+  Object.keys(KT.MML_LAYERS).forEach(function(k){var o=document.createElement('option');o.value=k;o.textContent=KT.MML_LAYERS[k].title;baseSel.appendChild(o)});
+  var savedMml=getStore('niitto_mmlkey'); if(savedMml){mmlKeyEl.value=savedMml;mmlRem.checked=true}
+  function storeMml(){ if(mmlRem.checked&&mmlKeyEl.value) setStore('niitto_mmlkey',mmlKeyEl.value); else { try{localStorage.removeItem('niitto_mmlkey')}catch(e){} } }
+  mmlRem.addEventListener('change',storeMml);
+  mmlKeyEl.addEventListener('change',function(){storeMml(); if(mapCtl) mapCtl.setKey(mmlKeyEl.value.trim())});
+  baseSel.addEventListener('change',function(){ if(mapCtl) mapCtl.setLayer(baseSel.value) });
+  document.getElementById('mapOpen').addEventListener('click',function(){
+    var w=document.getElementById('mapWrap'), open=w.hidden; w.hidden=!open; this.setAttribute('aria-expanded',open?'true':'false');
+    this.textContent=open?'Piilota kartta':'Valitse kartalta';
+    if(open&&!mapCtl){
+      try{
+        mapCtl=KT.createMap(document.getElementById('map'),{key:mmlKeyEl.value.trim(),layer:baseSel.value,
+          year:parseInt((document.getElementById('dStart').value||'').slice(0,4),10)||new Date().getFullYear(),
+          onMessage:function(t,c){pickSay(t,c)}, onSelect:function(p){p.kind='kasvulohko';applyParcel(p)}});
+        if(fieldState) mapCtl.show({type:'Feature',properties:{},geometry:fieldState.geometry});
+      }catch(e){pickSay('Karttaa ei voitu avata: '+e.message,'fail')}
+    } else if(open&&mapCtl){ setTimeout(function(){mapCtl.invalidate()},0) }
+  });
+  var drawBtn=document.getElementById('drawBtn'), drawDone=document.getElementById('drawDone'), drawCancel=document.getElementById('drawCancel'), mapHint=document.getElementById('mapHint');
+  function drawUi(on){drawBtn.hidden=on;drawDone.hidden=!on;drawCancel.hidden=!on;mapHint.textContent=on?'Klikkaa lohkon kulmat järjestyksessä ja paina Valmis.':'Lähennä ja klikkaa kasvulohkoa.'}
+  drawBtn.addEventListener('click',function(){if(!mapCtl)return;mapCtl.startDraw();drawUi(true)});
+  drawCancel.addEventListener('click',function(){mapCtl.stopDraw();drawUi(false)});
+  drawDone.addEventListener('click',function(){var f=mapCtl.finishDraw(); if(f){drawUi(false); applyParcel({feature:f,kind:'piirretty',tunnus:null}); pickSay('Rajaus piirretty käsin'+(fieldState?' · '+fx(fieldState.areaM2/1e4,2)+' ha':'')+'. Lisää kasvulohkon tunnus yllä olevaan kenttään.','ok')}});
 
   function fetchOpts(){
     var p=readP();

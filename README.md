@@ -8,13 +8,15 @@
 - **niiton tunnistuksen**, joka seuraa Ruokaviraston satelliittiseurannan rakennetta (aikasarja → muutos → pysyvyys → todennäköisyysraja). Tunnistus toteutetaan avoimella Sen4CAP-niittoalgoritmilla (De Vroey ym. 2022), ja lähteinä ovat HLS, Sentinel-2, PlanetScope ja Sentinel-1-koherenssi. Tuloksena saadaan lisätietoteksti Vipu-mobiiliin ja toistettava JSON-raportti.
 - **datahaun**, joka hakee lohkolle HLS-kuvat (ilman tunnusta) ja PlanetScope-kuvat (Planet-API-avaimella) ja laskee niistä havaintotaulukon suoraan selaimessa
 
-Kaikki laskenta tapahtuu selaimessa. Vain datahaussa lohkon rajaus lähetetään hakupalveluun (Microsoft Planetary Computer tai Planet). Muuta tietoa ei lähetetä minnekään.
+Kaikki laskenta tapahtuu selaimessa. Vain datahaussa ja lohkon valinnassa tietoa lähetetään palveluihin: lohkon rajaus hakupalveluun (Microsoft Planetary Computer tai Planet), peruslohkotunnus tai klikkauspiste Ruokaviraston rajapintaan ja karttanäkymän tiilipyynnöt MML:lle tai OpenStreetMapille. Muuta tietoa ei lähetetä minnekään.
 
 | Tiedosto | Sisältö |
 | --- | --- |
 | `index.html` | sovellus |
 | `core.js` | tunnistuslogiikka ilman DOM-riippuvuuksia |
 | `datahaku.js` | HLS- ja PlanetScope-haku sekä pikselilaskenta selaimessa |
+| `kartta.js` | lohkon valinta: peruslohkotunnus, kartta (MML, Ruokavirasto) ja piirto |
+| `vendor/leaflet/` | [Leaflet](https://leafletjs.com/) 1.9.4 kartalle (BSD-2, `vendor/leaflet/LICENSE`) |
 | `vendor/geotiff.js` | [geotiff.js](https://github.com/geotiffjs/geotiff.js) 2.1.3 GeoTIFF-kuvien lukuun (MIT, `vendor/geotiff.LICENSE`) |
 | `scripts/hae_havainnot.py` | sama haku komentoriviltä; tukee myös NASA Earthdataa, tuottaa CSV:n |
 | `scripts/hae_kasvulohkot.py` | niittovelvoitteiset lohkot Ruokaviraston avoimesta kasvulohkoaineistosta |
@@ -28,6 +30,25 @@ Avaa `index.html` selaimessa tai julkaise repo GitHub Pagesilla (Settings → Pa
 ## Datahaku ja tunnukset
 
 Niittoraportti-välilehdellä on osio *Hae havainnot satelliittikuvista*. Liitä siihen lohkon rajaus GeoJSONina (WGS84 tai ETRS-TM35FIN, esim. `hae_kasvulohkot.py`:n tuottamasta tiedostosta yksi lohko), valitse aikaväli ja hae.
+
+### Lohkon valinta: peruslohkotunnus, kartta tai piirto
+
+- **Peruslohkotunnuksella** (esim. `1641431471` tai kasvulohkon kanssa `1641431471-2`) sovellus hakee kasvulohkot Ruokaviraston INSPIRE-WFS:stä (`inspire.ruokavirasto-awsa.com/geoserver`, uusin julkaistu vuosi). Jos kasvulohkoja ei löydy, rajaukseksi tulee peruslohko.
+- **Kartalta**: avaa *Valitse kartalta*, lähennä ja klikkaa lohkoa. Kasvulohkot näkyvät Ruokaviraston WMS-tasona, ja klikkaus hakee lohkon GetFeatureInfo-kutsulla.
+- **Piirtämällä**: *Piirrä rajaus itse*, klikkaa kulmat ja paina *Valmis*.
+
+Valinta täyttää lohkon rajauksen, kasvulohkon tunnuksen ja kasvin perusteella toimenpiteen. Aineistot: kasvulohkot © Ruokavirasto (CC BY 4.0), taustakartat © Maanmittauslaitos (CC BY 4.0) tai OpenStreetMap.
+
+**MML-API-avain** (taustakartta, maastokartta, selkokartta, ortokuva): rekisteröidy [Oma tili](https://omatili.maanmittauslaitos.fi/) -palveluun, valitse avoimet rajapintapalvelut ja luo API-avain ([ohje](https://www.maanmittauslaitos.fi/rajapinnat/api-avaimen-ohje)). Liitä avain kartan kenttään *MML-API-avain*. Ilman avainta kartta käyttää OpenStreetMapia.
+
+Jos Ruokaviraston rajapinta ei salli hakua selaimesta, sama rajaus saadaan skriptillä avoimesta GeoPackage-aineistosta:
+
+```
+pip install geopandas pyogrio requests
+python scripts/hae_kasvulohkot.py --peruslohko 1641431471 --vuodet 2025
+```
+
+Skripti kirjoittaa jokaisesta kasvulohkosta tiedoston `lohko_<tunnus>.geojson` (WGS84), jonka voi avata sovelluksessa tai antaa `hae_havainnot.py --lohko` -parametriksi.
 
 ### HLS: ei tunnusta
 
