@@ -142,5 +142,38 @@ const B = feat({ PERUSLOHKOTUNNUS: 1641431471, LOHKONUMERO: 2, KASVIKOODI_SELITE
     assert.ok(g.includes('info_format=text%2Fjavascript'));
   });
 
+  await t('välityspalvelin: suora kutsu estyy → haku kulkee Workerin kautta', async () => {
+    const seen = [];
+    const inner = mockFetch([]);
+    const PX = 'https://rv.example.workers.dev';
+    const f = async (url) => {
+      seen.push(url);
+      if (url.startsWith('https://inspire.ruokavirasto-awsa.com/')) throw new TypeError('Failed to fetch');
+      assert.ok(url.startsWith(PX + '/wfs?'), 'osoite käännetty: ' + url);
+      const r = await inner(url.replace(PX + '/', 'https://inspire.ruokavirasto-awsa.com/geoserver/'));
+      return { status: 200, text: r.text };
+    };
+    const r = await K.findByTunnus('1641431471-2', { year: 2025, fetch: f, proxy: PX, jsonp: async () => { throw new Error('ei kuulu käyttää'); } });
+    assert.strictEqual(r.via, 'proxy');
+    assert.strictEqual(r.parcels[0].tunnus, '1641431471-2');
+    assert.strictEqual(seen.filter((u) => u.startsWith('https://inspire')).length, 1, 'suoraa kutsua kokeillaan vain kerran');
+  });
+
+  await t('välityspalvelin hylkää originin → ohje ALLOWED_ORIGINS-muuttujasta', async () => {
+    const f = async (url) => { if (url.startsWith('https://inspire')) throw new TypeError('x'); return { status: 403, text: async () => '{"error":"Origin ei ole sallittu."}' }; };
+    await assert.rejects(() => K.findByTunnus('1641431471', { year: 2025, fetch: f, proxy: 'https://rv.example.workers.dev' }), /ALLOWED_ORIGINS/);
+  });
+
+  await t('välityspalvelin ei vastaa → ohje tarkistaa osoite', async () => {
+    const f = async () => { throw new TypeError('x'); };
+    await assert.rejects(() => K.findByTunnus('1641431471', { year: 2025, fetch: f, proxy: 'https://rv.example.workers.dev', jsonp: async () => { throw new Error('ei'); } }), /Välityspalvelin ei vastannut/);
+  });
+
+  await t('osoitteen kääntö välityspalvelimelle', () => {
+    assert.strictEqual(K.viaProxy('https://inspire.ruokavirasto-awsa.com/geoserver/wms?a=1', 'https://p.dev'), 'https://p.dev/wms?a=1');
+    assert.strictEqual(K.viaProxy('https://muu.fi/x', 'https://p.dev'), 'https://muu.fi/x');
+    assert.strictEqual(K.viaProxy('https://inspire.ruokavirasto-awsa.com/geoserver/wfs?b', null), 'https://inspire.ruokavirasto-awsa.com/geoserver/wfs?b');
+  });
+
   console.log(n + ' testiä läpi');
 })().catch((e) => { console.error(e); process.exit(1); });

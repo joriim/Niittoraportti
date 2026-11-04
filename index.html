@@ -368,7 +368,7 @@ footer{border-top:1px solid var(--line);padding:24px 0 40px;font-size:14px;color
           <li>Kirjaudu sisään ja luo uusi API-avain. Ohje: <a href="https://www.maanmittauslaitos.fi/rajapinnat/api-avaimen-ohje" rel="noopener">MML:n API-avaimen ohje</a>.</li>
           <li>Liitä avain kenttään <em>MML-API-avain</em> (näkyy, kun avaat kartan). Valinnalla <em>Muista tällä selaimella</em> avain tallentuu tämän selaimen muistiin (localStorage). Avain lähetetään vain MML:n karttapalveluun karttakuvien mukana.</li>
         </ol>
-        <p class="small muted">Jos Ruokaviraston rajapinta ei salli hakua selaimesta, hae rajaus skriptillä:</p>
+        <p class="small muted">Ruokaviraston rajapinta ei salli hakua selaimesta. Tunnushaku ja kartan klikkaus toimivat välityspalvelimen kautta, jos sellainen on otettu käyttöön (ohje: <code>worker/README.md</code>). Muuten piirrä rajaus kartalle tai hae se skriptillä:</p>
         <pre>pip install geopandas pyogrio requests
 python scripts/hae_kasvulohkot.py --peruslohko 1641431471 --vuodet 2025</pre>
         <p class="small muted">Skripti lataa Ruokaviraston avoimen kasvulohkoaineiston ja kirjoittaa jokaisesta kasvulohkosta tiedoston <code>lohko_&lt;tunnus&gt;.geojson</code>, jonka voi avata yllä painikkeella <em>Avaa tiedosto</em>.</p>
@@ -507,6 +507,7 @@ python scripts/hae_havainnot.py --lohko lohko.geojson --alku 2026-05-01 --loppu 
 <script src="vendor/geotiff.js"></script>
 <script src="datahaku.js"></script>
 <script src="vendor/leaflet/leaflet.js"></script>
+<script src="config.js"></script>
 <script src="kartta.js"></script>
 <script>
 (function(){
@@ -756,7 +757,7 @@ python scripts/hae_havainnot.py --lohko lohko.geojson --alku 2026-05-01 --loppu 
     try{
       var y=parseInt((document.getElementById('dStart').value||'').slice(0,4),10)||new Date().getFullYear();
       var r=await KT.findByTunnus(document.getElementById('pltIn').value,{year:y});
-      if(r.parcels.length===1){applyParcel(r.parcels[0]); if(r.via==='jsonp') pickMsg.textContent+=' (haettu JSONP:llä)'}
+      if(r.parcels.length===1){applyParcel(r.parcels[0]); if(r.via==='jsonp') pickMsg.textContent+=' (haettu JSONP:llä)'; if(r.via==='proxy') pickMsg.textContent+=' (haettu välityspalvelimen kautta)'}
       else{
         pickSay('Peruslohkolla on '+r.parcels.length+' kasvulohkoa vuonna '+r.year+'. Valitse niitettävä lohko:');
         r.parcels.forEach(function(p){

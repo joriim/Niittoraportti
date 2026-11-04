@@ -16,6 +16,8 @@ Kaikki laskenta tapahtuu selaimessa. Vain datahaussa ja lohkon valinnassa tietoa
 | `core.js` | tunnistuslogiikka ilman DOM-riippuvuuksia |
 | `datahaku.js` | HLS- ja PlanetScope-haku sekä pikselilaskenta selaimessa |
 | `kartta.js` | lohkon valinta: peruslohkotunnus, kartta (MML, Ruokavirasto) ja piirto |
+| `config.js` | asetukset: Ruokaviraston rajapinnan välityspalvelimen osoite |
+| `worker/` | Cloudflare Worker, joka välittää Ruokaviraston kasvulohkokyselyt selaimelle (ohje `worker/README.md`) |
 | `vendor/leaflet/` | [Leaflet](https://leafletjs.com/) 1.9.4 kartalle (BSD-2, `vendor/leaflet/LICENSE`) |
 | `vendor/geotiff.js` | [geotiff.js](https://github.com/geotiffjs/geotiff.js) 2.1.3 GeoTIFF-kuvien lukuun (MIT, `vendor/geotiff.LICENSE`) |
 | `scripts/hae_havainnot.py` | sama haku komentoriviltä; tukee myös NASA Earthdataa, tuottaa CSV:n |
@@ -41,7 +43,9 @@ Valinta täyttää lohkon rajauksen, kasvulohkon tunnuksen ja kasvin perusteella
 
 **MML-API-avain** (taustakartta, maastokartta, selkokartta, ortokuva): rekisteröidy [Oma tili](https://omatili.maanmittauslaitos.fi/) -palveluun, valitse avoimet rajapintapalvelut ja luo API-avain ([ohje](https://www.maanmittauslaitos.fi/rajapinnat/api-avaimen-ohje)). Liitä avain kartan kenttään *MML-API-avain*. Ilman avainta kartta käyttää OpenStreetMapia.
 
-Jos Ruokaviraston rajapinta ei salli hakua selaimesta, sama rajaus saadaan skriptillä avoimesta GeoPackage-aineistosta:
+Ruokaviraston rajapinta ei salli hakua selaimesta (ei CORSia eikä JSONP:tä). Tunnushaku ja kartan klikkaus toimivat siksi välityspalvelimen kautta. Ohje on tiedostossa [`worker/README.md`](worker/README.md): Cloudflare Worker otetaan käyttöön kerran, ja sen osoite kirjoitetaan tiedostoon `config.js`. Kunnes välityspalvelin on käytössä, rajauksen voi piirtää kartalle, avata GeoJSON-tiedostosta tai hakea skriptillä.
+
+Ilman välityspalvelinta sama rajaus saadaan skriptillä avoimesta GeoPackage-aineistosta:
 
 ```
 pip install geopandas pyogrio requests

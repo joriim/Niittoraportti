@@ -1,0 +1,10 @@
+{
+  "name": "niittoraportti-rv",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "npx wrangler deploy",
+    "dev": "npx wrangler dev",
+    "test": "node test.js"
+  }
+}

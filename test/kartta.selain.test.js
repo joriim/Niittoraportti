@@ -153,6 +153,33 @@ const cors = { 'Access-Control-Allow-Origin': '*' };
     await p2.close();
   }
 
+  // 6) Ilman CORSia ja JSONP:tä, välityspalvelin URL-parametrista → haku kulkee Workerin kautta
+  {
+    const p3 = await browser.newPage();
+    p3.on('pageerror', (e) => { if (!/Unexpected token '<'/.test(e.message)) errors.push(e.message); });
+    const PX = 'https://niittoraportti-rv.testi.workers.dev';
+    let proxied = 0;
+    await p3.route('https://inspire.ruokavirasto-awsa.com/**', (r) => r.abort('accessdenied'));
+    await p3.route(PX + '/**', (r) => {
+      proxied++;
+      const u = new URL(r.request().url()); const q = Object.fromEntries([...u.searchParams].map(([k, v]) => [k.toLowerCase(), v]));
+      assert.ok(u.pathname === '/wfs' || u.pathname === '/wms');
+      const body = q.request === 'GetFeature' ? { type: 'FeatureCollection', features: (q.typenames || '').includes('GSAA') ? PARCELS : [] } : { featureTypes: [{ properties: [{ name: 'PERUSLOHKOTUNNUS' }] }] };
+      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body), headers: { 'Access-Control-Allow-Origin': '*' } });
+    });
+    await p3.goto(`http://127.0.0.1:${server.address().port}/index.html?rvproxy=${encodeURIComponent(PX)}#tyokalu`);
+    await p3.fill('#dStart', '2025-05-01');
+    await p3.fill('#pltIn', '1641431471-2');
+    await p3.click('#pltGo');
+    await p3.waitForFunction(() => /Valittu|CORS|Välityspalvelin/.test(document.getElementById('pickMsg').textContent), null, { timeout: 20000 });
+    const msg = await p3.textContent('#pickMsg');
+    assert.match(msg, /Valittu kasvulohko 1641431471-2 .*\(haettu välityspalvelimen kautta\)/, msg);
+    assert.ok(proxied >= 2);
+    assert.strictEqual(await p3.evaluate(() => localStorage.getItem('niitto_rvproxy')), PX, 'osoite muistetaan');
+    console.log('ok välityspalvelin: haku kulkee Workerin kautta ja osoite muistetaan');
+    await p3.close();
+  }
+
   assert.ok(!(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)));
   assert.deepStrictEqual(errors, []);
   await browser.close(); server.close();

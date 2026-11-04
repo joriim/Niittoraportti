@@ -1,0 +1,9 @@
+# Cloudflare Worker: Ruokaviraston INSPIRE-rajapinnan välityspalvelin Niittoraportille.
+# Käyttöönotto: ks. README.md tässä kansiossa.
+name = "niittoraportti-rv"
+main = "src/index.js"
+compatibility_date = "2025-06-01"
+
+[vars]
+# Pilkulla erotettu lista sivustoista, joilta kutsut sallitaan.
+ALLOWED_ORIGINS = "https://joriim.github.io,http://localhost:8000,http://127.0.0.1:8000"

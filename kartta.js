@@ -197,44 +197,76 @@
     });
   }
 
+  // ---------- välityspalvelin (Cloudflare Worker, ks. worker/README.md) ----------
+  var RV_PREFIX = 'https://inspire.ruokavirasto-awsa.com/geoserver/';
+  /** Välityspalvelimen osoite: URL-parametri ?rvproxy=… (tallentuu selaimeen), muuten config.js. */
+  function proxyBase() {
+    var v = null;
+    try {
+      var m = root.location && /[?&]rvproxy=([^&#]*)/.exec(root.location.search || '');
+      if (m) { v = decodeURIComponent(m[1]); if (v) root.localStorage.setItem('niitto_rvproxy', v); else root.localStorage.removeItem('niitto_rvproxy'); }
+      if (!v && root.localStorage) v = root.localStorage.getItem('niitto_rvproxy');
+    } catch (e) { /* tallennus estetty */ }
+    if (!v && root.NIITTO_CONFIG && root.NIITTO_CONFIG.rvProxy) v = root.NIITTO_CONFIG.rvProxy;
+    return v ? String(v).replace(/\/+$/, '') : null;
+  }
+  function viaProxy(url, base) {
+    return base && url.indexOf(RV_PREFIX) === 0 ? base + '/' + url.slice(RV_PREFIX.length) : url;
+  }
+
+  async function readJson(r) {
+    var txt = await r.text();
+    try { return JSON.parse(txt); } catch (e) { return null; } // poikkeus-XML = tasoa ei ole tai suodatin väärä
+  }
+
   /**
-   * Luo JSON-hakijan Ruokaviraston rajapintaan. mode: null = ei vielä tiedossa, 'fetch' tai 'jsonp'.
-   * JSONP otetaan käyttöön vain, jos koekutsu tunnetulle tasolle (GSAA 2023) onnistuu, jotta
-   * "JSONP pois päältä" ei näy virheellisesti tuloksena "lohkoa ei löytynyt".
+   * Luo JSON-hakijan Ruokaviraston rajapintaan. Reitit kokeillaan järjestyksessä:
+   * suora kutsu ('fetch') → välityspalvelin ('proxy', jos määritetty) → JSONP ('jsonp').
+   * Toimiva reitti muistetaan. JSONP otetaan käyttöön vain, jos koekutsu tunnetulle tasolle
+   * (GSAA 2023) onnistuu, jotta "JSONP pois päältä" ei näy tuloksena "lohkoa ei löytynyt".
    */
   function makeTransport(opts) {
     opts = opts || {};
     var get = opts.fetch || (typeof fetch === 'function' ? fetch : null);
     var jsonp = opts.jsonp || jsonpBrowser;
-    var t = { mode: opts.mode || null };
+    var proxy = 'proxy' in opts ? opts.proxy : proxyBase();
+    var t = { mode: opts.mode || null, proxy: proxy };
     var probe = null;
     function probeJsonp() {
       if (!probe) probe = jsonp(wfsUrl(parcelLayer(2023), 'INCLUDE').replace('count=50', 'count=1')).then(function (d) { return !!(d && d.features); }, function () { return false; });
       return probe;
     }
+    async function tryGet(u) { try { return await get(u); } catch (e) { return null; } }
     t.json = async function (url) {
-      if (t.mode !== 'jsonp') {
-        var r = null;
-        try { r = await get(url); } catch (e) { r = null; }
-        if (r) {
-          t.mode = 'fetch';
-          var txt = await r.text();
-          try { return JSON.parse(txt); } catch (e) { return null; } // poikkeus-XML = tasoa ei ole tai suodatin väärä
-        }
-        if (t.mode === 'fetch') throw new Error('NET');           // toimi aiemmin, nyt yhteysvirhe
-        if (!(await probeJsonp())) throw new Error('CORS');
-        t.mode = 'jsonp';
+      var r;
+      if (t.mode === 'fetch' || t.mode === 'proxy') {
+        r = await tryGet(t.mode === 'proxy' ? viaProxy(url, proxy) : url);
+        if (!r) throw new Error('NET');                           // toimi aiemmin, nyt yhteysvirhe
+        if (t.mode === 'proxy' && r.status === 403) throw new Error('PROXY403');
+        return readJson(r);
       }
-      try { return await jsonp(url); } catch (e) { return null; }   // poikkeus tai ei osumaa
+      if (t.mode === 'jsonp') { try { return await jsonp(url); } catch (e) { return null; } }
+      r = await tryGet(url);
+      if (r) { t.mode = 'fetch'; return readJson(r); }
+      if (proxy) {
+        r = await tryGet(viaProxy(url, proxy));
+        if (r && r.status === 403) throw new Error('PROXY403');
+        if (r) { t.mode = 'proxy'; return readJson(r); }
+      }
+      if (!(await probeJsonp())) throw new Error(proxy ? 'PROXYDOWN' : 'CORS');
+      t.mode = 'jsonp';
+      try { return await jsonp(url); } catch (e) { return null; }
     };
     return t;
   }
   var sharedTransport = null;
   function transport() { return sharedTransport || (sharedTransport = makeTransport()); }
 
-  function corsMessage(tunnus) {
-    return 'Ruokaviraston rajapinta ei salli hakua selaimesta: CORS on estetty eikä JSONP ole käytössä. ' +
-      'Piirrä rajaus kartalle tai hae se skriptillä: python scripts/hae_kasvulohkot.py --peruslohko ' + (tunnus || '<tunnus>');
+  function corsMessage(tunnus, code) {
+    var tail = 'Piirrä rajaus kartalle tai hae se skriptillä: python scripts/hae_kasvulohkot.py --peruslohko ' + (tunnus || '<tunnus>');
+    if (code === 'PROXY403') return 'Välityspalvelin ei hyväksy tätä sivua (Origin ei ole sallittu). Lisää osoite Workerin ALLOWED_ORIGINS-muuttujaan. ' + tail;
+    if (code === 'PROXYDOWN') return 'Välityspalvelin ei vastannut, eikä Ruokaviraston rajapinta salli hakua selaimesta. Tarkista välityspalvelimen osoite. ' + tail;
+    return 'Ruokaviraston rajapinta ei salli hakua selaimesta: CORS on estetty eikä JSONP ole käytössä, eikä välityspalvelinta ole määritetty (ks. worker/README.md). ' + tail;
   }
 
   /**
@@ -249,7 +281,7 @@
     var from = opts.year || new Date().getFullYear(), fieldCache = {};
     async function json(url) {
       try { return await tr.json(url); } catch (e) {
-        if (e.message === 'CORS') throw new Error(corsMessage(t.peruslohko));
+        if (/^(CORS|PROXY403|PROXYDOWN)$/.test(e.message)) throw new Error(corsMessage(t.peruslohko, e.message));
         throw new Error('Yhteys Ruokaviraston rajapintaan katkesi. Yritä uudelleen tai hae rajaus skriptillä: python scripts/hae_kasvulohkot.py --peruslohko ' + t.peruslohko);
       }
     }
@@ -353,8 +385,8 @@
       say('Haetaan lohkoa…', 'info');
       var js;
       try { js = await transport().json(gfiUrl(lon, lat, year)); } catch (err) {
-        say(err.message === 'CORS'
-          ? 'Ruokaviraston palvelu ei salli lohkon hakua selaimesta: CORS on estetty eikä JSONP ole käytössä. Piirrä rajaus itse tai liitä GeoJSON.'
+        say(/^(CORS|PROXY403|PROXYDOWN)$/.test(err.message)
+          ? corsMessage(null, err.message).replace(/Piirrä rajaus kartalle tai hae se skriptillä.*$/, 'Piirrä rajaus itse tai liitä GeoJSON.')
           : 'Yhteys Ruokaviraston palveluun katkesi. Yritä uudelleen tai piirrä rajaus itse.', 'fail');
         return;
       }
@@ -387,6 +419,6 @@
     measureFor: measureFor, fixAxis: fixAxis, contains: contains, createMap: createMap, MML_LAYERS: MML_LAYERS, RV_WMS: RV_WMS,
     RV_WFS: RV_WFS, wfsUrl: wfsUrl, describeUrl: describeUrl, parseTunnus: parseTunnus, tunnusField: tunnusField,
     parcelsFromWfs: parcelsFromWfs, findByTunnus: findByTunnus, lpisLayer: lpisLayer, areaHa: areaHa,
-    toJsonp: toJsonp, makeTransport: makeTransport, transportMode: function () { return sharedTransport ? sharedTransport.mode : null; } };
+    toJsonp: toJsonp, makeTransport: makeTransport, viaProxy: viaProxy, proxyBase: proxyBase, corsMessage: corsMessage, transportMode: function () { return sharedTransport ? sharedTransport.mode : null; } };
   if (typeof module === 'object' && module.exports) module.exports = api; else root.NiittoKartta = api;
 })(typeof self !== 'undefined' ? self : this);
