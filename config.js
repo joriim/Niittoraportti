@@ -8,5 +8,5 @@
  * Osoitteen voi antaa myös URL-parametrina: index.html?rvproxy=https://… (tallentuu selaimeen).
  */
 window.NIITTO_CONFIG = {
-  rvProxy: ''
+  rvProxy: 'https://niittoraportti-rv.miiro-jaaskelainen.workers.dev'
 };
