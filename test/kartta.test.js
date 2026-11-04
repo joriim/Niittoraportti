@@ -77,6 +77,7 @@ const B = feat({ PERUSLOHKOTUNNUS: 1641431471, LOHKONUMERO: 2, KASVIKOODI_SELITE
       if (!kasvu && year > 2025) return exc();
       if (q.request === 'DescribeFeatureType') return ok({ featureTypes: [{ properties: [{ name: 'geom' }, { name: 'PERUSLOHKOTUNNUS' }, { name: 'LOHKONUMERO' }] }] });
       assert.strictEqual(q.outputFormat, 'application/json');
+      if (q.CQL_FILTER === 'INCLUDE') return ok(fc([JSON.parse(JSON.stringify(A))]));
       assert.match(q.CQL_FILTER, /^PERUSLOHKOTUNNUS='\d{10}'$/);
       const id = q.CQL_FILTER.match(/'(\d+)'/)[1];
       if (opts.noKasvu && kasvu) return ok(fc([]));
@@ -111,6 +112,34 @@ const B = feat({ PERUSLOHKOTUNNUS: 1641431471, LOHKONUMERO: 2, KASVIKOODI_SELITE
     await assert.rejects(() => K.findByTunnus('1640000000', { year: 2025, fetch: mockFetch([]) }), /ei löytynyt Ruokaviraston aineistosta/);
     await assert.rejects(() => K.findByTunnus('abc', { fetch: mockFetch([]) }), /kymmenellä numerolla/);
     await assert.rejects(() => K.findByTunnus('1641431471', { year: 2025, fetch: mockFetch([], { cors: true }) }), /hae_kasvulohkot\.py --peruslohko 1641431471/);
+  });
+
+  await t('JSONP-varareitti: CORS estää fetchin, JSONP-koekutsu onnistuu', async () => {
+    const calls = [];
+    const corsFetch = async () => { throw new TypeError('Failed to fetch'); };
+    const inner = mockFetch([]);
+    // mockFetch odottaa application/json -muotoa; muunnetaan kutsu takaisin ennen sitä
+    const r = await K.findByTunnus('1641431471-2', { year: 2025, fetch: corsFetch, jsonp: async (u) => {
+      const back = u.replace('outputFormat=text%2Fjavascript', 'outputFormat=application%2Fjson').replace(/&format_options=[^&]*/, '');
+      calls.push(u);
+      let txt; try { txt = await (await inner(back)).text(); } catch (e) { throw new Error('x'); }
+      try { return JSON.parse(txt); } catch (e) { throw new Error('poikkeus'); }
+    } });
+    assert.strictEqual(r.via, 'jsonp');
+    assert.strictEqual(r.parcels[0].tunnus, '1641431471-2');
+    assert.ok(calls[0].includes('GSAAAgriculturalParcel.2023') && calls[0].includes('count=1'), 'koekutsu tunnetulle tasolle');
+  });
+
+  await t('JSONP-varareitti: koekutsu epäonnistuu → selkeä CORS-viesti', async () => {
+    await assert.rejects(() => K.findByTunnus('1641431471', { year: 2025, fetch: async () => { throw new TypeError('x'); }, jsonp: async () => { throw new Error('ei'); } }),
+      /CORS on estetty eikä JSONP ole käytössä.*--peruslohko 1641431471/);
+  });
+
+  await t('JSONP-osoite: muoto ja callback', () => {
+    const u = K.toJsonp(K.wfsUrl('inspire:x', "A='1'"), 'cb1');
+    assert.ok(u.includes('outputFormat=text%2Fjavascript') && u.endsWith('&format_options=callback%3Acb1'));
+    const g = K.toJsonp(K.gfiUrl(22.8, 62.8, 2023), 'cb2');
+    assert.ok(g.includes('info_format=text%2Fjavascript'));
   });
 
   console.log(n + ' testiä läpi');

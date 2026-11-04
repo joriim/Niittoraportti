@@ -756,7 +756,7 @@ python scripts/hae_havainnot.py --lohko lohko.geojson --alku 2026-05-01 --loppu 
     try{
       var y=parseInt((document.getElementById('dStart').value||'').slice(0,4),10)||new Date().getFullYear();
       var r=await KT.findByTunnus(document.getElementById('pltIn').value,{year:y});
-      if(r.parcels.length===1){applyParcel(r.parcels[0])}
+      if(r.parcels.length===1){applyParcel(r.parcels[0]); if(r.via==='jsonp') pickMsg.textContent+=' (haettu JSONP:llä)'}
       else{
         pickSay('Peruslohkolla on '+r.parcels.length+' kasvulohkoa vuonna '+r.year+'. Valitse niitettävä lohko:');
         r.parcels.forEach(function(p){

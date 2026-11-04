@@ -117,6 +117,42 @@ const cors = { 'Access-Control-Allow-Origin': '*' };
   await page.waitForFunction(() => /OpenStreetMap/.test(document.getElementById('pickMsg').textContent), null, { timeout: 10000 });
   console.log('ok väärä MML-avain vaihtaa OpenStreetMapiin');
 
+  // 5) Palvelin ilman CORS-otsakkeita: JSONP päällä → haku toimii; JSONP pois → selkeä viesti
+  for (const jsonpOn of [true, false]) {
+    const p2 = await browser.newPage();
+    // Kun palvelin palauttaa XML:ää JSONP-pyyntöön, selain raportoi syntaksivirheen; se on odotettu eikä kaada sovellusta.
+    p2.on('pageerror', (e) => { if (!/Unexpected token '<'/.test(e.message)) errors.push(e.message); });
+    await p2.route('https://tile.openstreetmap.org/**', (r) => r.fulfill({ status: 200, contentType: 'image/png', body: png(240, 240, 240, 255) }));
+    await p2.route('https://inspire.ruokavirasto-awsa.com/**', (r) => {
+      const u = new URL(r.request().url()); const q = Object.fromEntries([...u.searchParams].map(([k, v]) => [k.toLowerCase(), v]));
+      const fmt = (q.outputformat || q.info_format || '');
+      if (q.request === 'GetMap') return r.fulfill({ status: 200, contentType: 'image/png', body: png(194, 65, 12, 90) });
+      if (fmt === 'text/javascript') {
+        if (!jsonpOn) return r.fulfill({ status: 200, contentType: 'application/xml', body: '<ows:ExceptionReport>JSONP disabled</ows:ExceptionReport>' });
+        const cb = (q.format_options || '').replace('callback:', '');
+        const body = q.request === 'GetFeature' ? { type: 'FeatureCollection', features: (q.typenames || '').includes('GSAA') ? PARCELS : [] } : { featureTypes: [] };
+        return r.fulfill({ status: 200, contentType: 'text/javascript', body: cb + '(' + JSON.stringify(body) + ')' });
+      }
+      return r.abort('accessdenied'); // vastaa CORS-estoa: fetch heittää TypeErrorin (Playwrightin fulfill ohittaisi CORSin)
+    });
+    await p2.goto(`http://127.0.0.1:${server.address().port}/index.html#tyokalu`);
+    await p2.fill('#dStart', '2025-05-01');
+    await p2.fill('#pltIn', '1641431471-2');
+    await p2.click('#pltGo');
+    await p2.waitForFunction(() => /Valittu|CORS/.test(document.getElementById('pickMsg').textContent), null, { timeout: 20000 });
+    const msg = await p2.textContent('#pickMsg');
+    if (jsonpOn) {
+      assert.match(msg, /Valittu kasvulohko 1641431471-2 · Luonnonhoitonurmi .*\(haettu JSONP:llä\)/, msg);
+      assert.strictEqual(await p2.inputValue('#lohko'), '1641431471-2');
+      console.log('ok ilman CORSia: JSONP-varareitti hakee lohkon');
+    } else {
+      assert.match(msg, /CORS on estetty eikä JSONP ole käytössä/, msg);
+      console.log('ok ilman CORSia ja JSONP:tä: selkeä virheviesti');
+    }
+    assert.strictEqual(await p2.evaluate(() => Object.keys(window).filter((k) => k.startsWith('__niittoJsonp')).length), 0, 'callbackit siivottu');
+    await p2.close();
+  }
+
   assert.ok(!(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)));
   assert.deepStrictEqual(errors, []);
   await browser.close(); server.close();

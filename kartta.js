@@ -167,22 +167,91 @@
     });
   }
 
+  // ---------- kuljetus: fetch (CORS) ja varalla JSONP ----------
+  // Ruokaviraston GeoServer ei välttämättä lähetä CORS-otsakkeita. GeoServer voi kuitenkin palauttaa
+  // vastauksen JSONP-muodossa (text/javascript + format_options=callback:…), jos JSONP on palvelimella päällä.
+  // JSONP:ssä script-elementti ladataan suoraan; jos palvelin palauttaa poikkeuksen, callbackia ei kutsuta.
+  var jsonpSeq = 0;
+  function toJsonp(url, cb) {
+    var u = url.replace(/(outputFormat|info_format)=application%2Fjson/i, '$1=text%2Fjavascript');
+    return u + '&format_options=' + encodeURIComponent('callback:' + cb);
+  }
+  function jsonpBrowser(url, timeoutMs) {
+    return new Promise(function (resolve, reject) {
+      var doc = root.document; if (!doc) { reject(new Error('JSONP vaatii selaimen')); return; }
+      var cb = '__niittoJsonp' + (++jsonpSeq) + '_' + Date.now().toString(36);
+      var s = doc.createElement('script'), done = false, timer;
+      function end(err, val) {
+        if (done) return; done = true; clearTimeout(timer);
+        try { delete root[cb]; } catch (e) { root[cb] = undefined; }
+        if (s.parentNode) s.parentNode.removeChild(s);
+        if (err) reject(err); else resolve(val);
+      }
+      root[cb] = function (data) { end(null, data); };
+      s.onerror = function () { end(new Error('JSONP: lataus epäonnistui')); };
+      // Jos skripti latautuu mutta callbackia ei kutsuta (poikkeus-XML tai JSONP pois päältä), annetaan hetki aikaa.
+      s.onload = function () { setTimeout(function () { end(new Error('JSONP: ei vastausta')); }, 50); };
+      timer = setTimeout(function () { end(new Error('JSONP: aikakatkaisu')); }, timeoutMs || 20000);
+      s.src = toJsonp(url, cb);
+      doc.head.appendChild(s);
+    });
+  }
+
+  /**
+   * Luo JSON-hakijan Ruokaviraston rajapintaan. mode: null = ei vielä tiedossa, 'fetch' tai 'jsonp'.
+   * JSONP otetaan käyttöön vain, jos koekutsu tunnetulle tasolle (GSAA 2023) onnistuu, jotta
+   * "JSONP pois päältä" ei näy virheellisesti tuloksena "lohkoa ei löytynyt".
+   */
+  function makeTransport(opts) {
+    opts = opts || {};
+    var get = opts.fetch || (typeof fetch === 'function' ? fetch : null);
+    var jsonp = opts.jsonp || jsonpBrowser;
+    var t = { mode: opts.mode || null };
+    var probe = null;
+    function probeJsonp() {
+      if (!probe) probe = jsonp(wfsUrl(parcelLayer(2023), 'INCLUDE').replace('count=50', 'count=1')).then(function (d) { return !!(d && d.features); }, function () { return false; });
+      return probe;
+    }
+    t.json = async function (url) {
+      if (t.mode !== 'jsonp') {
+        var r = null;
+        try { r = await get(url); } catch (e) { r = null; }
+        if (r) {
+          t.mode = 'fetch';
+          var txt = await r.text();
+          try { return JSON.parse(txt); } catch (e) { return null; } // poikkeus-XML = tasoa ei ole tai suodatin väärä
+        }
+        if (t.mode === 'fetch') throw new Error('NET');           // toimi aiemmin, nyt yhteysvirhe
+        if (!(await probeJsonp())) throw new Error('CORS');
+        t.mode = 'jsonp';
+      }
+      try { return await jsonp(url); } catch (e) { return null; }   // poikkeus tai ei osumaa
+    };
+    return t;
+  }
+  var sharedTransport = null;
+  function transport() { return sharedTransport || (sharedTransport = makeTransport()); }
+
+  function corsMessage(tunnus) {
+    return 'Ruokaviraston rajapinta ei salli hakua selaimesta: CORS on estetty eikä JSONP ole käytössä. ' +
+      'Piirrä rajaus kartalle tai hae se skriptillä: python scripts/hae_kasvulohkot.py --peruslohko ' + (tunnus || '<tunnus>');
+  }
+
   /**
    * Hakee peruslohkon kasvulohkot (uusin saatavilla oleva vuosi). Jos kasvulohkoja ei löydy,
-   * palauttaa peruslohkon rajauksen. Palauttaa { year, kind, parcels } tai heittää virheen.
+   * palauttaa peruslohkon rajauksen. Palauttaa { year, kind, parcels, via } tai heittää virheen.
    */
   async function findByTunnus(input, opts) {
     opts = opts || {};
     var t = parseTunnus(input);
     if (!t) throw new Error('Anna peruslohkotunnus kymmenellä numerolla, esim. 1641431471, tai kasvulohkon kanssa 1641431471-2.');
-    var get = opts.fetch || fetch, from = opts.year || new Date().getFullYear(), fieldCache = {};
+    var tr = opts.fetch || opts.jsonp ? makeTransport(opts) : transport();
+    var from = opts.year || new Date().getFullYear(), fieldCache = {};
     async function json(url) {
-      var r;
-      try { r = await get(url); } catch (e) {
-        throw new Error('Ruokaviraston rajapinta ei salli hakua selaimesta (CORS) tai yhteys katkesi. Hae rajaus skriptillä: python scripts/hae_kasvulohkot.py --peruslohko ' + t.peruslohko);
+      try { return await tr.json(url); } catch (e) {
+        if (e.message === 'CORS') throw new Error(corsMessage(t.peruslohko));
+        throw new Error('Yhteys Ruokaviraston rajapintaan katkesi. Yritä uudelleen tai hae rajaus skriptillä: python scripts/hae_kasvulohkot.py --peruslohko ' + t.peruslohko);
       }
-      var txt = await r.text();
-      try { return JSON.parse(txt); } catch (e) { return null; } // poikkeus-XML = tasoa ei ole tai suodatin väärä
     }
     async function query(typeName) {
       if (!(typeName in fieldCache)) fieldCache[typeName] = tunnusField(await json(describeUrl(typeName)));
@@ -205,7 +274,7 @@
           var hit = list.filter(function (p) { return String(p.lohkonumero) === String(t.lohko) || p.tunnus === t.peruslohko + '-' + t.lohko; });
           if (hit.length) list = hit;
         }
-        return { year: y, kind: kind, parcels: list, tunnus: t };
+        return { year: y, kind: kind, parcels: list, tunnus: t, via: tr.mode };
       }
     }
     throw new Error('Peruslohkoa ' + t.peruslohko + ' ei löytynyt Ruokaviraston aineistosta vuosilta 2021–' + from + '.');
@@ -282,12 +351,14 @@
       if (!year) { say('Kasvulohkotasoa ei löytynyt. Piirrä rajaus itse.', 'warn'); return; }
       var lon = e.latlng.lng, lat = e.latlng.lat;
       say('Haetaan lohkoa…', 'info');
-      var r, js;
-      try { r = await fetch(gfiUrl(lon, lat, year)); } catch (err) {
-        say('Ruokaviraston palvelu ei salli lohkon hakua selaimesta (CORS) tai yhteys katkesi. Piirrä rajaus itse tai liitä GeoJSON.', 'fail');
+      var js;
+      try { js = await transport().json(gfiUrl(lon, lat, year)); } catch (err) {
+        say(err.message === 'CORS'
+          ? 'Ruokaviraston palvelu ei salli lohkon hakua selaimesta: CORS on estetty eikä JSONP ole käytössä. Piirrä rajaus itse tai liitä GeoJSON.'
+          : 'Yhteys Ruokaviraston palveluun katkesi. Yritä uudelleen tai piirrä rajaus itse.', 'fail');
         return;
       }
-      try { js = await r.json(); } catch (err) { say('Lohkopalvelu palautti virheen (HTTP ' + r.status + ').', 'fail'); return; }
+      if (!js) { say('Lohkopalvelu palautti virheen. Piirrä rajaus itse tai kokeile toista kohtaa.', 'fail'); return; }
       var pick = pickParcel(js, lon, lat, year);
       if (!pick) { say('Klikatusta kohdasta ei löytynyt kasvulohkoa vuodelta ' + year + '.', 'warn'); return; }
       show(pick.feature);
@@ -315,6 +386,7 @@
   var api = { mmlUrl: mmlUrl, gfiUrl: gfiUrl, probeUrl: probeUrl, parcelLayer: parcelLayer, pickParcel: pickParcel,
     measureFor: measureFor, fixAxis: fixAxis, contains: contains, createMap: createMap, MML_LAYERS: MML_LAYERS, RV_WMS: RV_WMS,
     RV_WFS: RV_WFS, wfsUrl: wfsUrl, describeUrl: describeUrl, parseTunnus: parseTunnus, tunnusField: tunnusField,
-    parcelsFromWfs: parcelsFromWfs, findByTunnus: findByTunnus, lpisLayer: lpisLayer, areaHa: areaHa };
+    parcelsFromWfs: parcelsFromWfs, findByTunnus: findByTunnus, lpisLayer: lpisLayer, areaHa: areaHa,
+    toJsonp: toJsonp, makeTransport: makeTransport, transportMode: function () { return sharedTransport ? sharedTransport.mode : null; } };
   if (typeof module === 'object' && module.exports) module.exports = api; else root.NiittoKartta = api;
 })(typeof self !== 'undefined' ? self : this);
