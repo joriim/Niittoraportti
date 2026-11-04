@@ -199,7 +199,7 @@
 
   // ---------- välityspalvelin (Cloudflare Worker, ks. worker/README.md) ----------
   var RV_PREFIX = 'https://inspire.ruokavirasto-awsa.com/geoserver/';
-  /** Välityspalvelimen osoite: URL-parametri ?rvproxy=… (tallentuu selaimeen), muuten config.js. */
+  /** Välityspalvelimen osoite: URL-parametri ?rvproxy=… (tallentuu selaimeen; off = ei välityspalvelinta), muuten config.js. */
   function proxyBase() {
     var v = null;
     try {
@@ -207,6 +207,7 @@
       if (m) { v = decodeURIComponent(m[1]); if (v) root.localStorage.setItem('niitto_rvproxy', v); else root.localStorage.removeItem('niitto_rvproxy'); }
       if (!v && root.localStorage) v = root.localStorage.getItem('niitto_rvproxy');
     } catch (e) { /* tallennus estetty */ }
+    if (v === 'off') return null;                                   // ?rvproxy=off ohittaa välityspalvelimen
     if (!v && root.NIITTO_CONFIG && root.NIITTO_CONFIG.rvProxy) v = root.NIITTO_CONFIG.rvProxy;
     return v ? String(v).replace(/\/+$/, '') : null;
   }
@@ -312,13 +313,106 @@
     throw new Error('Peruslohkoa ' + t.peruslohko + ' ei löytynyt Ruokaviraston aineistosta vuosilta 2021–' + from + '.');
   }
 
+  // ---------- niittovelvoitteisten lohkojen korostus (SLD Ruokaviraston WMS:ään) ----------
+  // Sama luokittelu kuin measureFor(): kasvin nimen perusteella. Värit näkyvät kartan selitteessä.
+  var NIITTO_CLASSES = [
+    { key: 'lhn', name: 'Luonnonhoitonurmi', fill: '#2e7d32', stroke: '#1b5e20', like: ['luonnonhoito'] },
+    { key: 'vln', name: 'Viherlannoitusnurmi', fill: '#1565c0', stroke: '#0d47a1', like: ['viherlannoitus'] },
+    { key: 'mmk', name: 'Monimuotoisuuskasvi', fill: '#8e24aa', stroke: '#6a1b9a', like: ['monimuotoisuus', 'niitty', 'pölyttäjä', 'riista', 'maisema'] },
+    { key: 'nk', name: 'Nurmi tai kesanto', fill: '#f9a825', stroke: '#b57a00', like: ['nurmi', 'kesanto'] }
+  ];
+  function xmlEsc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function likeF(field, word) {
+    return '<ogc:PropertyIsLike wildCard="*" singleChar="." escape="!" matchCase="false"><ogc:PropertyName>' + xmlEsc(field) +
+      '</ogc:PropertyName><ogc:Literal>*' + xmlEsc(word) + '*</ogc:Literal></ogc:PropertyIsLike>';
+  }
+  function anyLike(field, words) { return words.length === 1 ? likeF(field, words[0]) : '<ogc:Or>' + words.map(function (w) { return likeF(field, w); }).join('') + '</ogc:Or>'; }
+  /** SLD, joka piirtää vain niittovelvoitteiset kasvulohkot luokittain. Aiempi luokka voittaa (Not-ehdot). */
+  function niittoSld(year, field) {
+    field = field || 'KASVIKOODI_SELITE_FI';
+    // Vain nurmi/kesanto-luokan sanat ("nurmi") esiintyvät muiden luokkien nimissä (luonnonhoito-, viherlannoitusnurmi),
+    // joten vain sille tarvitaan poissulkeva ehto. Lyhyt SLD pitää tiilipyynnön osoitteen alle palvelimen rajan.
+    var rules = NIITTO_CLASSES.map(function (c) {
+      var f = anyLike(field, c.like);
+      if (c.key === 'nk') f = '<ogc:And>' + f + '<ogc:Not>' + anyLike(field, ['luonnonhoito', 'viherlannoitus']) + '</ogc:Not></ogc:And>';
+      return '<Rule><Name>' + c.key + '</Name><ogc:Filter>' + f + '</ogc:Filter>' +
+        '<PolygonSymbolizer><Fill><CssParameter name="fill">' + c.fill + '</CssParameter><CssParameter name="fill-opacity">0.45</CssParameter></Fill>' +
+        '<Stroke><CssParameter name="stroke">' + c.stroke + '</CssParameter><CssParameter name="stroke-width">1.5</CssParameter></Stroke></PolygonSymbolizer></Rule>';
+    }).join('');
+    return '<StyledLayerDescriptor version="1.0.0" xmlns="http://www.opengis.net/sld" xmlns:ogc="http://www.opengis.net/ogc">' +
+      '<NamedLayer><Name>' + xmlEsc(parcelLayer(year)) + '</Name><UserStyle><FeatureTypeStyle>' + rules +
+      '</FeatureTypeStyle></UserStyle></NamedLayer></StyledLayerDescriptor>';
+  }
+  function cropField(desc) {
+    var props = [];
+    ((desc && desc.featureTypes) || []).forEach(function (ft) { (ft.properties || []).forEach(function (p) { props.push(p.name); }); });
+    return props.filter(function (n) { return /kasvi.*selite.*fi|selite_fi/i.test(n); })[0] || props.filter(function (n) { return /selite|kasvi/i.test(n) && !/koodi$/i.test(n); })[0] || null;
+  }
+
+  // ---------- paikkahaku ----------
+  /** Tulkitsee koordinaatit: "62.79, 22.84" (lat, lon), "22.84 62.79" tai ETRS-TM35FIN "6965000 290000". */
+  function parseCoords(q) {
+    var m = /^\s*(-?\d+(?:[.,]\d+)?)\s*[,;\s]\s*(-?\d+(?:[.,]\d+)?)\s*$/.exec(q || '');
+    if (!m) return null;
+    var a = parseFloat(m[1].replace(',', '.')), b = parseFloat(m[2].replace(',', '.'));
+    if (Math.abs(a) <= 90 && Math.abs(b) <= 180) {
+      if (a >= 58 && a <= 71) return { lat: a, lon: b };
+      if (b >= 58 && b <= 71) return { lat: b, lon: a };
+      return { lat: a, lon: b };
+    }
+    var H = root.NiittoHaku;
+    if (H && H.toLonLat) {
+      var n = Math.max(a, b), e = Math.min(a, b);         // Suomessa N 6,6–7,8 milj., E 0,05–0,75 milj.
+      if (n > 6.5e6 && n < 7.9e6 && e > 0 && e < 8e5) { var ll = H.toLonLat(e, n, 3067); return { lat: ll[1], lon: ll[0] }; }
+    }
+    return null;
+  }
+  function geocodeUrl(q, key) {
+    return key
+      ? 'https://avoin-paikkatieto.maanmittauslaitos.fi/geocoding/v2/pelias/search?text=' + encodeURIComponent(q) + '&size=6&lang=fin&api-key=' + encodeURIComponent(key)
+      : 'https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=fi&limit=6&accept-language=fi&q=' + encodeURIComponent(q);
+  }
+  function parseGeocode(js) {
+    if (Array.isArray(js)) return js.map(function (r) { return { label: r.display_name, lat: +r.lat, lon: +r.lon }; });
+    return ((js && js.features) || []).filter(function (f) { return f.geometry && f.geometry.coordinates; }).map(function (f) {
+      var c = f.geometry.coordinates, lon = +c[0], lat = +c[1], p = f.properties || {};
+      if (Math.abs(lon) > 180 && root.NiittoHaku) { var ll = root.NiittoHaku.toLonLat(lon, lat, 3067); lon = ll[0]; lat = ll[1]; }
+      var label = p.label || p.name || [p['label:fin'], p.municipality].filter(Boolean).join(', ') || 'paikka';
+      return { label: label, lat: lat, lon: lon };
+    });
+  }
+  /** Hakee paikan nimellä tai osoitteella: MML:n geokoodaus avaimella, muuten OpenStreetMap (Nominatim). */
+  async function geocode(q, key, opts) {
+    var c = parseCoords(q);
+    if (c) return [{ label: 'Koordinaatit ' + c.lat.toFixed(5) + ', ' + c.lon.toFixed(5), lat: c.lat, lon: c.lon }];
+    var get = (opts && opts.fetch) || fetch;
+    async function one(k) { var r = await get(geocodeUrl(q, k)); if (!r.ok) throw new Error('HTTP ' + r.status); return parseGeocode(await r.json()); }
+    if (key) { try { var res = await one(key); if (res.length) return res; } catch (e) { /* MML ei vastannut: kokeillaan OSM */ } }
+    return one(null);
+  }
+
   // ---------- selainosa ----------
   function createMap(el, opts) {
     var L = root.L; if (!L) throw new Error('Leaflet puuttuu.');
     opts = opts || {};
     var say = opts.onMessage || function () {};
-    var map = L.map(el, { zoomControl: true, attributionControl: true }).setView([62.8, 23.5], 6);
-    var base = null, parcels = null, selected = null, draft = null, drawPts = [], drawing = false, year = null;
+    var map = L.map(el, { zoomControl: true, attributionControl: true, scrollWheelZoom: false }).setView([62.8, 23.5], 6);
+    el._niittoMap = map; // testejä ja vianetsintää varten
+    var base = null, parcels = null, niitto = null, selected = null, draft = null, drawPts = [], drawing = false, year = null;
+    var highlight = opts.highlight !== false, cropName = 'KASVIKOODI_SELITE_FI', niittoErrors = 0, needFit = false;
+    // Rullazoomi vasta, kun karttaa on klikattu, jotta sivun vieritys ei zoomaa karttaa.
+    map.on('click focus', function () { map.scrollWheelZoom.enable(); });
+    map.on('mouseout blur', function () { map.scrollWheelZoom.disable(); });
+    // Kartta alustetaan usein piilossa olevaan elementtiin: koko päivitetään aina, kun se muuttuu.
+    function fitSelected() {
+      if (!selected) return;
+      if (!el.clientWidth || !el.clientHeight) { needFit = true; return; }
+      needFit = false;
+      try { map.fitBounds(selected.getBounds(), { maxZoom: 17, padding: [20, 20] }); } catch (e) { /* tyhjä */ }
+    }
+    function resized() { map.invalidateSize(); if (needFit) fitSelected(); }
+    if (typeof ResizeObserver === 'function') new ResizeObserver(resized).observe(el);
+    setTimeout(resized, 0);
     var state = { key: opts.key || '', layer: opts.layer || 'taustakartta', tileErrors: 0 };
 
     function setBase() {
@@ -341,7 +435,23 @@
       if (parcels) map.removeLayer(parcels);
       parcels = L.tileLayer.wms(RV_WMS, { layers: parcelLayer(y), styles: '', format: 'image/png', transparent: true, opacity: 0.7, minZoom: 12, attribution: ATTR_RV });
       parcels.addTo(map);
+      setNiitto();
     }
+    function setNiitto() {
+      if (niitto) { map.removeLayer(niitto); niitto = null; }
+      if (!highlight || !year) return;
+      niittoErrors = 0;
+      niitto = L.tileLayer.wms(RV_WMS, { layers: parcelLayer(year), styles: '', sld_body: niittoSld(year, cropName), format: 'image/png', transparent: true, minZoom: 11, attribution: ATTR_RV });
+      niitto.on('tileerror', function () { if (++niittoErrors === 3) say('Niittovelvoitteisten lohkojen korostusta ei voitu piirtää: palvelu ei hyväksynyt tyyliä.', 'warn'); });
+      niitto.addTo(map);
+    }
+    // Tarkistetaan kasvisarakkeen nimi kerran (vaatii välityspalvelimen tai CORSin; muuten oletusnimi).
+    (async function () {
+      try {
+        var d = await transport().json(describeUrl(parcelLayer(opts.year || new Date().getFullYear() - 1)));
+        var f = cropField(d); if (f && f !== cropName) { cropName = f; setNiitto(); }
+      } catch (e) { /* oletusnimi jää käyttöön */ }
+    })();
 
     // Etsii uusimman vuoden, jolle kasvulohkotaso on olemassa (kuvan lataus ei vaadi CORSia).
     function resolveYear(from, done) {
@@ -358,7 +468,8 @@
     function show(feature) {
       if (selected) map.removeLayer(selected);
       selected = L.geoJSON(feature, { style: { color: '#c2410c', weight: 3, fillOpacity: 0.12 } }).addTo(map);
-      try { map.fitBounds(selected.getBounds(), { maxZoom: 17, padding: [20, 20] }); } catch (e) { /* tyhjä */ }
+      map.invalidateSize();
+      fitSelected();
     }
 
     function finishDraw() {
@@ -411,7 +522,10 @@
       getYear: function () { return year; },
       show: show, startDraw: startDraw, finishDraw: finishDraw, stopDraw: stopDraw,
       isDrawing: function () { return drawing; },
-      invalidate: function () { map.invalidateSize(); }
+      invalidate: resized,
+      setHighlight: function (on) { highlight = !!on; setNiitto(); },
+      goTo: function (lat, lon, z) { map.invalidateSize(); map.setView([lat, lon], z || 15, { animate: false }); },
+      key: function () { return state.key; }
     };
   }
 
@@ -419,6 +533,7 @@
     measureFor: measureFor, fixAxis: fixAxis, contains: contains, createMap: createMap, MML_LAYERS: MML_LAYERS, RV_WMS: RV_WMS,
     RV_WFS: RV_WFS, wfsUrl: wfsUrl, describeUrl: describeUrl, parseTunnus: parseTunnus, tunnusField: tunnusField,
     parcelsFromWfs: parcelsFromWfs, findByTunnus: findByTunnus, lpisLayer: lpisLayer, areaHa: areaHa,
+    NIITTO_CLASSES: NIITTO_CLASSES, niittoSld: niittoSld, cropField: cropField, parseCoords: parseCoords, geocodeUrl: geocodeUrl, parseGeocode: parseGeocode, geocode: geocode,
     toJsonp: toJsonp, makeTransport: makeTransport, viaProxy: viaProxy, proxyBase: proxyBase, corsMessage: corsMessage, transportMode: function () { return sharedTransport ? sharedTransport.mode : null; } };
   if (typeof module === 'object' && module.exports) module.exports = api; else root.NiittoKartta = api;
 })(typeof self !== 'undefined' ? self : this);

@@ -201,6 +201,8 @@
     return opt[0] || ev.dets.slice().sort(function (x, y) { return y.conf - x.conf; })[0];
   }
 
+  function huom(n) { return n + (n === 1 ? ' huomautus' : ' huomautusta'); }
+
   function fiMD(md) { var p = md.split('-'); return (+p[1]) + '.' + (+p[0]) + '.'; }
   function fi(d) { var p = d.split('-'); return (+p[2]) + '.' + (+p[1]) + '.' + p[0]; }
 
@@ -229,10 +231,10 @@
     else {
       var nf = best.checks.filter(function (c) { return c.s === 'fail'; }).length;
       var nw = best.checks.filter(function (c) { return c.s === 'warn'; }).length;
-      if (nf) verdict = { level: 'fail', label: 'Niitto tunnistettu, mutta tukiehto ei täyty', detail: nf + ' hylkäävää tarkistusta' };
+      if (nf) verdict = { level: 'fail', label: 'Niitto tunnistettu, mutta tukiehto ei täyty', detail: nf + (nf === 1 ? ' hylkäävä tarkistus' : ' hylkäävää tarkistusta') };
       else if (nw === 0) verdict = { level: 'strong', label: 'Vahva näyttö niitosta', detail: 'Kaikki tarkistukset kunnossa' };
-      else if (nw <= 2) verdict = { level: 'moderate', label: 'Kohtalainen näyttö niitosta', detail: nw + ' huomautusta' };
-      else verdict = { level: 'weak', label: 'Heikko näyttö niitosta', detail: nw + ' huomautusta' };
+      else if (nw <= 2) verdict = { level: 'moderate', label: 'Kohtalainen näyttö niitosta', detail: huom(nw) + ' päätunnistuksessa' };
+      else verdict = { level: 'weak', label: 'Heikko näyttö niitosta', detail: huom(nw) + ' päätunnistuksessa' };
     }
     return { version: VERSION, params: p, rule: rule, used: prep.used, excluded: prep.excluded, rejected: rejected, events: events, best: best, verdict: verdict };
   }

@@ -84,6 +84,7 @@ const item = (id, c, d, p, nir, e) => ({ id, collection: c, properties: { dateti
   console.log('ok HLS-haku täyttää taulukon ja tunnistus löytää niiton:', verdict.replace(/\s+/g, ' ').slice(0, 120));
   await page.screenshot({ path: path.join(process.env.SHOT_DIR || require('os').tmpdir(), 'selain_hls.png'), fullPage: false });
 
+  await page.click('#psBox > summary'); // PlanetScope on neuvojille suljettuna
   await page.fill('#plKey', 'PLAK-testi');
   await page.click('#psSearch');
   await page.waitForFunction(() => !document.getElementById('psOrder').disabled, null, { timeout: 10000 });

@@ -103,7 +103,9 @@ const cors = { 'Access-Control-Allow-Origin': '*' };
 
   // 3) Piirto
   await page.click('#drawBtn');
-  for (const [dx, dy] of [[-60, -40], [60, -40], [60, 40], [-60, 40]]) await page.mouse.click(bb.x + bb.width / 2 + dx, bb.y + bb.height / 2 + dy);
+  await page.$eval('#map', (e) => e.scrollIntoView({ block: 'center' }));
+  const bb2 = await (await page.$('#map')).boundingBox(); // viestit voivat siirtää karttaa
+  for (const [dx, dy] of [[-60, -40], [60, -40], [60, 40], [-60, 40]]) await page.mouse.click(bb2.x + bb2.width / 2 + dx, bb2.y + bb2.height / 2 + dy);
   await page.click('#drawDone');
   const d = JSON.parse(await page.inputValue('#geo'));
   assert.strictEqual(d.geometry.coordinates[0].length, 5);
@@ -135,7 +137,7 @@ const cors = { 'Access-Control-Allow-Origin': '*' };
       }
       return r.abort('accessdenied'); // vastaa CORS-estoa: fetch heittää TypeErrorin (Playwrightin fulfill ohittaisi CORSin)
     });
-    await p2.goto(`http://127.0.0.1:${server.address().port}/index.html#tyokalu`);
+    await p2.goto(`http://127.0.0.1:${server.address().port}/index.html?rvproxy=off#tyokalu`);
     await p2.fill('#dStart', '2025-05-01');
     await p2.fill('#pltIn', '1641431471-2');
     await p2.click('#pltGo');

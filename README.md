@@ -39,7 +39,9 @@ Niittoraportti-välilehdellä on osio *Hae havainnot satelliittikuvista*. Liitä
 - **Kartalta**: avaa *Valitse kartalta*, lähennä ja klikkaa lohkoa. Kasvulohkot näkyvät Ruokaviraston WMS-tasona, ja klikkaus hakee lohkon GetFeatureInfo-kutsulla.
 - **Piirtämällä**: *Piirrä rajaus itse*, klikkaa kulmat ja paina *Valmis*.
 
-Valinta täyttää lohkon rajauksen, kasvulohkon tunnuksen ja kasvin perusteella toimenpiteen. Aineistot: kasvulohkot © Ruokavirasto (CC BY 4.0), taustakartat © Maanmittauslaitos (CC BY 4.0) tai OpenStreetMap.
+Valinta täyttää lohkon rajauksen, kasvulohkon tunnuksen ja kasvin perusteella toimenpiteen. Jos lohkon kasvi ei ole niittovelvoitteinen (esim. Rehuohra), toimenpide jätetään valitsematta. Silloin sovellus varoittaa, että NDVI:n lasku voi olla sadonkorjuuta tai tuleentumista, eikä Vipu-tekstiä muodosteta ennen kuin toimenpide on vahvistettu. Jos lohkoaineisto on eri vuodelta kuin arvioitava kausi, siitä varoitetaan ja aineistovuosi kirjataan Vipu-tekstiin. Lohkon vaihto tyhjentää edellisen lohkon havainnot ja tuloksen.
+
+Kartalla niittovelvoitteiset kasvulohkot korostetaan kasvin mukaan: luonnonhoitonurmi, viherlannoitusnurmi, monimuotoisuuskasvi sekä nurmi tai kesanto. Korostus piirretään Ruokaviraston WMS-palvelussa SLD-tyylillä, joten se ei tarvitse välityspalvelinta. Paikkahaku toimii nimellä tai osoitteella (MML:n geokoodaus avaimella, muuten OpenStreetMap) sekä koordinaateilla (WGS84 tai ETRS-TM35FIN). Kartta zoomaa hiiren rullalla vasta, kun sitä on klikattu. Aineistot: kasvulohkot © Ruokavirasto (CC BY 4.0), taustakartat © Maanmittauslaitos (CC BY 4.0) tai OpenStreetMap.
 
 **MML-API-avain** (taustakartta, maastokartta, selkokartta, ortokuva): rekisteröidy [Oma tili](https://omatili.maanmittauslaitos.fi/) -palveluun, valitse avoimet rajapintapalvelut ja luo API-avain ([ohje](https://www.maanmittauslaitos.fi/rajapinnat/api-avaimen-ohje)). Liitä avain kartan kenttään *MML-API-avain*. Ilman avainta kartta käyttää OpenStreetMapia.
 

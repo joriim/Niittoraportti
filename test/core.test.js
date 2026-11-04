@@ -121,3 +121,25 @@ t('tukihavaintojen huomautukset eivät heikennä vahvaa tapahtumaa', () => {
   assert.ok(r.best.checks.some(c => c.s === 'info'));
 });
 console.log('lisätesti läpi');
+
+t('näytön tason selite taipuu oikein', () => {
+  const r = C.analyze([
+    { date: '2026-07-01', src: 'HLS-S30', value: 0.80 },
+    { date: '2026-07-20', src: 'HLS-S30', value: 0.45, changed: 95 },
+    { date: '2026-07-25', src: 'HLS-S30', value: 0.47 },
+  ], {});
+  assert.strictEqual(r.verdict.level, 'moderate');
+  assert.strictEqual(r.verdict.detail, '1 huomautus päätunnistuksessa');
+});
+console.log('taivutustesti läpi');
+
+t('huomautusten taivutus: 1 huomautus, 2 huomautusta', () => {
+  const one = C.analyze([
+    { date: '2026-07-01', src: 'HLS-S30', value: 0.80, valid: 100 },
+    { date: '2026-07-20', src: 'HLS-S30', value: 0.45, valid: 100, changed: 95 },
+    { date: '2026-07-25', src: 'HLS-S30', value: 0.47, valid: 100 },
+  ], {});
+  assert.strictEqual(one.verdict.level, 'moderate');
+  assert.match(one.verdict.detail, /^1 huomautus päätunnistuksessa$/);
+});
+console.log('taivutustesti läpi');

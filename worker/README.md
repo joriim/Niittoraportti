@@ -46,7 +46,7 @@ window.NIITTO_CONFIG = {
 
 Commitoi ja pushaa muutos, niin GitHub Pages käyttää välityspalvelinta kaikille.
 
-Jos haluat kokeilla ennen commitointia, avaa sovellus osoitteella `https://joriim.github.io/Niittoraportti/?rvproxy=https://niittoraportti-rv.<tilisi>.workers.dev`. Osoite tallentuu selaimeen. Tyhjä arvo (`?rvproxy=`) poistaa sen.
+Jos haluat kokeilla ennen commitointia, avaa sovellus osoitteella `https://joriim.github.io/Niittoraportti/?rvproxy=https://niittoraportti-rv.<tilisi>.workers.dev`. Osoite tallentuu selaimeen. Tyhjä arvo (`?rvproxy=`) poistaa tallennetun osoitteen, ja `?rvproxy=off` ohittaa välityspalvelimen kokonaan.
 
 ## Tarkistus
 

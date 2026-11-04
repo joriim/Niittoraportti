@@ -175,5 +175,29 @@ const B = feat({ PERUSLOHKOTUNNUS: 1641431471, LOHKONUMERO: 2, KASVIKOODI_SELITE
     assert.strictEqual(K.viaProxy('https://inspire.ruokavirasto-awsa.com/geoserver/wfs?b', null), 'https://inspire.ruokavirasto-awsa.com/geoserver/wfs?b');
   });
 
+  await t('korostustyyli: neljä luokkaa, nurmi ei kata luonnonhoito- eikä viherlannoitusnurmea, pituus kohtuullinen', () => {
+    const x = K.niittoSld(2025);
+    assert.strictEqual((x.match(/<Rule>/g) || []).length, 4);
+    assert.ok(x.includes('inspire:LandUse.ExistingLandUse.GSAAAgriculturalParcel.2025'));
+    const nk = x.slice(x.indexOf('<Name>nk</Name>'));
+    assert.ok(/<ogc:Not>.*\*luonnonhoito\*.*\*viherlannoitus\*.*<\/ogc:Not>/.test(nk));
+    assert.ok(encodeURIComponent(x).length < 6000, 'tiiliosoite pysyy palvelimen rajan alla');
+    assert.ok(K.niittoSld(2025, 'KASVI').includes('<ogc:PropertyName>KASVI</ogc:PropertyName>'));
+    assert.strictEqual(K.cropField({ featureTypes: [{ properties: [{ name: 'KASVIKOODI' }, { name: 'KASVIKOODI_SELITE_FI' }] }] }), 'KASVIKOODI_SELITE_FI');
+  });
+
+  await t('paikkahaku: OSM- ja MML-vastaukset sekä koordinaatit', async () => {
+    assert.deepStrictEqual(K.parseGeocode([{ display_name: 'Seinäjoki', lat: '62.79', lon: '22.84' }]), [{ label: 'Seinäjoki', lat: 62.79, lon: 22.84 }]);
+    assert.deepStrictEqual(K.parseGeocode({ features: [{ geometry: { coordinates: [22.84, 62.79] }, properties: { label: 'Seinäjoki, Seinäjoki' } }] }), [{ label: 'Seinäjoki, Seinäjoki', lat: 62.79, lon: 22.84 }]);
+    assert.ok(K.geocodeUrl('Ylistaro', 'abc').startsWith('https://avoin-paikkatieto.maanmittauslaitos.fi/geocoding/v2/pelias/search?text=Ylistaro'));
+    assert.ok(K.geocodeUrl('Ylistaro', null).includes('nominatim.openstreetmap.org'));
+    const r = await K.geocode('62,79; 22,84', null, { fetch: async () => { throw new Error('ei kutsuta'); } });
+    assert.strictEqual(r[0].lat, 62.79);
+    // MML ei vastaa → OpenStreetMap
+    const urls = [];
+    const r2 = await K.geocode('Ylistaro', 'avain', { fetch: async (u) => { urls.push(u); if (u.includes('maanmittauslaitos')) throw new TypeError('x'); return { ok: true, json: async () => [{ display_name: 'Ylistaro', lat: '62.94', lon: '22.51' }] }; } });
+    assert.strictEqual(r2[0].label, 'Ylistaro'); assert.strictEqual(urls.length, 2);
+  });
+
   console.log(n + ' testiä läpi');
 })().catch((e) => { console.error(e); process.exit(1); });
