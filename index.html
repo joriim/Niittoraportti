@@ -138,6 +138,8 @@ footer{border-top:1px solid var(--line);padding:24px 0 40px;font-size:14px;color
 .src li{margin-bottom:8px}
 .toggle{position:absolute;right:16px;top:16px}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.yearrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 14px}
+.yearrow select{width:auto;min-width:6.5em}
 .light{display:flex;gap:12px;align-items:center;padding:10px 12px;border-radius:10px;background:var(--bg2, rgba(0,0,0,.03))}
 .light .dot,.ldot{display:inline-block;width:18px;height:18px;border-radius:50%;flex:none;background:var(--muted)}
 .ldot{width:10px;height:10px;margin-right:6px;vertical-align:middle}
@@ -406,6 +408,11 @@ details.adv{margin-top:16px}
       <div class="col-form">
         <h3 class="q">Mikä lohko tarkistetaan?</h3>
         <p class="muted small" style="margin-top:-6px">Kirjoita lohkon tunnus tai paikka. Voit myös klikata lohkoa kartalla.</p>
+        <div class="yearrow">
+          <label for="yearSel" class="lbl" style="margin:0">Tarkasteluvuosi</label>
+          <select id="yearSel" aria-describedby="yearHint"></select>
+          <span class="small muted" id="yearHint">Lohkon rajaus, kasvi ja satelliittikuvat haetaan tältä vuodelta.</span>
+        </div>
         <label for="pltIn" class="lbl">Lohkon tunnus, osoite tai paikannimi</label>
         <div class="searchrow">
           <input id="pltIn" class="big" type="search" autocomplete="off" spellcheck="false" placeholder="esim. 1641431471 tai Lapioneva" aria-describedby="pltHint">

@@ -63,7 +63,7 @@ Skripti kirjoittaa jokaisesta kasvulohkosta tiedoston `lohko_<tunnus>.geojson` (
 
 ### Käyttö vaiheittain
 
-1. **Lohko.** Kirjoita lohkon tunnus, osoite, paikannimi tai koordinaatit, käytä puhelimen sijaintia tai klikkaa lohkoa kartalla.
+1. **Lohko.** Valitse tarkasteluvuosi (oletus kuluva kausi, 2016 alkaen). Kirjoita lohkon tunnus, osoite, paikannimi tai koordinaatit, käytä puhelimen sijaintia tai klikkaa lohkoa kartalla. Vuosi määrää hakujakson (1.5.–15.10.) sekä Ruokaviraston rajauksen ja kasvin vuoden. Vuoden vaihto hakee tunnuksella valitun lohkon uudelleen ja poistaa toisen vuoden havainnot.
 2. **Tiedot.** Vahvista tukiehto, aikaväli ja kuvalähde: HLS (oletus), pelkkä Sentinel-2 tai molemmat ja lähdevertailu. Raja-arvot ja PlanetScope ovat lisäasetuksissa.
 3. **Tulos.** Näytön vahvuus, avainluvut, NDVI-käyrä, lähdevertailu sekä valmis teksti Vipu-mobiiliin. Raportin voi tulostaa, tallentaa PDF:nä tai ladata JSONina.
 

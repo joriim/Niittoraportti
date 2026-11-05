@@ -145,7 +145,7 @@
         : '<strong>Valitse lohkon toimenpide.</strong> Vipu-tekstiä ei muodosteta ilman toimenpidettä.';
       $('cropOk').parentNode.hidden=!cs.measure;
     }
-    var season=seasonYear(), yearNote=parcelInfo.vuosi&&season&&parcelInfo.vuosi!==season?'Lohkon rajaus ja kasvi ovat Ruokaviraston vuoden '+parcelInfo.vuosi+' aineistosta, arvioitava kausi on '+season+'. Tarkista, että ne ovat samat tänä vuonna.':null;
+    var season=seasonYear(), yearNote=parcelInfo.vuosi&&season&&parcelInfo.vuosi!==season?'Lohkon rajaus ja kasvi ovat Ruokaviraston vuoden '+parcelInfo.vuosi+' aineistosta, arvioitava kausi on '+season+'. Tarkista, että ne ovat samat vuonna '+season+'.':null;
     // Merkintä vain esimerkkidatalle; teksti tyhjennetään, ettei se näy tekstinä luettaessa piilotettunakaan.
     $('exBadge').hidden=!exampleOn; $('exBadge').textContent=exampleOn?'keksitty esimerkkidata':'';
     $('resMeta').textContent='Kasvulohko '+lohko+(p.measure?' · '+p.measure:'')+(season?' · '+season:'');
@@ -437,12 +437,22 @@
   var keyEl=$('plKey'), remEl=$('plRemember'), ordEl=$('psOrderId');
   var psOrderBtn=$('psOrder');
 
-  (function initDates(){
-    var d=new Date(), y=d.getMonth()<5?d.getFullYear()-1:d.getFullYear();
+  // ---------- Tarkasteluvuosi ----------
+  // Oletus: kuluva kausi (tammi–toukokuussa edellinen vuosi). Vuosi määrää hakujakson, Ruokaviraston
+  // kasvulohkoaineiston vuoden ja kartan korostuksen. Satelliittiaineistot: Sentinel-2 ja PlanetScope 2016–.
+  var YEAR_MIN=2016, yearSel=$('yearSel');
+  function defaultYear(){var d=new Date();return d.getMonth()<5?d.getFullYear()-1:d.getFullYear()}
+  function datesFor(y){
     // Jakso jatkuu kuukauden määräpäivän (15.9.) yli, jotta niiton jälkeen saadaan 1–2 selkeää kuvaa.
-    var end=y+'-10-15', today=d.toISOString().slice(0,10);
+    var end=y+'-10-15', today=new Date().toISOString().slice(0,10);
     $('dStart').value=y+'-05-01';
     $('dEnd').value=today<end?today:end;
+  }
+  (function initYears(){
+    var top=Math.max(defaultYear(),new Date().getFullYear());
+    for(var y=top;y>=YEAR_MIN;y--){var o=document.createElement('option');o.value=String(y);o.textContent=String(y)+(y===top&&new Date().getMonth()<5&&y===new Date().getFullYear()?' (kausi alkamatta)':'');yearSel.appendChild(o)}
+    yearSel.value=String(defaultYear());
+    datesFor(defaultYear());
   })();
   var savedKey=getSess('niitto_plkey'); if(savedKey){keyEl.value=savedKey;remEl.checked=true}
   var savedOrd=getSess('niitto_order'); if(savedOrd){try{ordEl.value=JSON.parse(savedOrd).id||''}catch(e){}}
@@ -524,7 +534,7 @@
     if(mapCtl) mapCtl.show(p.feature);
     var season=seasonYear(), msg='Valittu '+(p.kind==='peruslohko'?'peruslohko ':'kasvulohko ')+(p.tunnus||'')+(p.kasvi?' · '+p.kasvi:'')+(fieldState?' · '+fx(fieldState.areaM2/1e4,2)+' ha':'')+(p.year?' · Ruokavirasto '+p.year:'')+'.';
     if(p.kind==='peruslohko') msg+=' Kasvulohkoja ei löytynyt, joten rajaus on koko peruslohko. Tarkista, että se vastaa niitettävää alaa.';
-    if(p.year&&season&&p.year!==season) msg+=' Huom: rajaus ja kasvi ovat vuoden '+p.year+' aineistosta, arvioitava kausi on '+season+'. Tarkista, että ne ovat samat tänä vuonna.';
+    if(p.year&&season&&p.year!==season) msg+=' Huom: rajaus ja kasvi ovat vuoden '+p.year+' aineistosta, arvioitava kausi on '+season+'. Tarkista, että ne ovat samat vuonna '+season+'.';
     pickSay(msg, p.year&&season&&p.year!==season?'warn':'ok');
   }
   function clearChoices(el){Array.prototype.slice.call(el.querySelectorAll('.choice')).forEach(function(b){b.remove()});el.hidden=true}
@@ -560,6 +570,29 @@
     pickSay('Valitse paikka:');
     res.forEach(function(r){choice(placeList,'<span>'+esc(r.label.length>80?r.label.slice(0,78)+'…':r.label)+'</span>',function(){clearChoices(placeList);go(r)})});
   }
+  // Vuoden vaihto: hakujakso, kartta ja lohkon rajaus vaihtuvat. Toisen vuoden havainnot poistetaan,
+  // ja tunnuksella valittu lohko haetaan uudelleen valitun vuoden aineistosta.
+  async function changeYear(y,keepStart){
+    if(!y) return;
+    if(keepStart){ var st=$('dStart').value; datesFor(y); $('dStart').value=st }
+    else { if(y===seasonYear()) return; datesFor(y) }
+    if(!yearSel.querySelector('option[value="'+y+'"]')){var o=document.createElement('option');o.value=String(y);o.textContent=String(y);yearSel.appendChild(o)}
+    yearSel.value=String(y);
+    var obs=readObs();
+    if(obs.some(function(o){return o.date.slice(0,4)!==String(y)})) clearForNewField();
+    if(mapCtl) mapCtl.setYear(y);
+    if(lastParcel&&lastParcel.tunnus&&lastParcel.year&&lastParcel.year!==y){
+      try{ pickSay('Haetaan lohkon '+lastParcel.tunnus+' rajaus vuoden '+y+' aineistosta…'); await findTunnus(lastParcel.tunnus) }
+      catch(e){ pickSay(e.message,'fail') }
+    } else render();
+    updateParcel();
+  }
+  yearSel.addEventListener('change',function(){changeYear(parseInt(yearSel.value,10))});
+  // Jos käyttäjä muuttaa alkupäivän toiselle vuodelle, vuosivalinta seuraa.
+  $('dStart').addEventListener('change',function(){
+    var y=seasonYear(); if(!y||String(y)===yearSel.value) return;
+    changeYear(y,true);
+  });
   $('pltGo').addEventListener('click',async function(){
     var q=$('pltIn').value.trim(); if(!q){$('pltIn').focus();return}
     var btn=this; btn.disabled=true; clearChoices(pltList); clearChoices(placeList);
