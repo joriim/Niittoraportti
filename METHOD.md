@@ -27,7 +27,7 @@ Käyttäjä syöttää yhden rivin havaintoa kohden.
 | Lähde | HLS-S30, HLS-L30, Sentinel-2, PlanetScope | Sentinel-1 koherenssi |
 | Kuvatunniste | HLS granule id / PlanetScope item id | kuvaparin tunniste |
 | Arvo | lohkon NDVI-mediaani | lohkon VH-koherenssin keskiarvo |
-| Kelvolliset % | pilvettömien pikselien osuus (HLS: Fmask, PlanetScope: UDM2 clear) | – |
+| Kelvolliset % | pilvettömien pikselien osuus (HLS: Fmask, Sentinel-2: SCL, PlanetScope: UDM2 clear) | – |
 | Muuttunut % | pikselien osuus, joissa NDVI laski ≥ kynnyksen edellisestä havainnosta | – |
 
 Havainnot voi syöttää käsin, tuoda CSV:nä tai hakea työkalun datahaulla (ks. alla). Lohko kutistetaan ennen laskentaa reunapuskurin verran (oletus 10 m), koska kutistettu lohko parantaa tunnistusta [L4] ja Sen4CAP käyttää vain kokonaan lohkon sisällä olevia pikseleitä [L2].
@@ -48,6 +48,10 @@ Pikselitason laskennan tekevät selaimessa [`datahaku.js`](datahaku.js) ja komen
 | Muuttunut % | osuus kelvollisista pikseleistä, joissa NDVI laski ≥ kynnyksen (oletus 0,12) verrattuna edelliseen saman perheen havaintoon, jossa kelvollisia oli ≥ raja (oletus 50 %). Vertailu tehdään pikselin keskipisteen kohdalta edellisen kuvan ruudukossa, tarvittaessa koordinaatistomuunnoksen kautta. Arvo jätetään tyhjäksi, jos verrattavia pikseleitä on alle puolet. | sama |
 | Saman päivän kuvat | pidetään kuva, jossa on eniten kelvollisia pikseleitä | sama |
 
+**Sentinel-2 L2A ilman HLS:ää.** Sovellus hakee myös ESA:n Sentinel-2 L2A -kuvat Planetary Computerista (`sentinel-2-l2a`, ei tunnusta). NDVI lasketaan 10 metrin kaistoista (B08 − B04)/(B08 + B04). Pilvet poistetaan Scene Classification -kerroksella (SCL, 20 m): kelvollisia ovat luokat 4 kasvillisuus, 5 paljas maa ja 6 vesi. Jokaiselle 10 m pikselille haetaan sen 20 m SCL-solu. Prosessointiversiosta 04.00 alkaen (25.1.2022) heijastusarvoista vähennetään siirtymä 1000 ennen NDVI:n laskemista. Lohkon pikselit, muuttunut osuus ja saman päivän valinta lasketaan kuten HLS:lle. Sentinel-2 on oma sensoriperheensä (S2).
+
+Sentinel-2 L2A ja HLS S30 perustuvat samoihin kuviin. Pääarvio käyttää siksi HLS:ää, kun molemmat on haettu, eikä laske niitä toisistaan riippumattomiksi lähteiksi. Sentinel-2 on silloin mukana vain lähdevertailussa.
+
 Datahaussa lohkon rajaus lähetetään hakupalveluun. Planet-API-avain on vain selaimen muistissa (valinnaisesti välilehden istuntomuistissa), eikä sitä tallenneta raporttiin. Jos Planet ei salli kutsua selaimesta (CORS), käytetään skriptiä.
 
 ## Algoritmi
@@ -66,6 +70,19 @@ Datahaussa lohkon rajaus lähetetään hakupalveluun. Planet-API-avain on vain s
 | 8 | Tapahtumat | Alle 28 vrk:n päässä toisistaan olevista pidetään varmempi; enintään 4 | 28 vrk, 4 | Δt<sub>min</sub> ja enimmäismäärä [L2] |
 | 9 | Todennäköisyysraja | Tapahtuma hyväksytään, kun luottamus ≥ raja. Tutka yksin (≤ 0,5) ei riitä. | 0,6 | oma; vrt. status-kohtainen raja [R5] |
 | 10 | Tukiehto | Niittoväliä verrataan toimenpiteen päivämääriin, ja suurimman muuttuneen osuuden on oltava ≥ raja | 90 % | päivämäärät [R4]; osuus oma |
+
+### Lähdevertailu
+
+Lähdevertailu vastaa kysymykseen, tuovatko lisälähteet paremman näkymän niittotapahtumaan. Sama tunnistus ajetaan erikseen kullekin saatavilla olevalle lähdeyhdistelmälle: Sentinel-2 L2A, HLS ilman Landsatia (S30), HLS (Sentinel-2 + Landsat), PlanetScope, Sentinel-2 + PlanetScope, HLS + PlanetScope ja HLS + PlanetScope + Sentinel-1. Kustakin raportoidaan:
+
+| Mittari | Merkitys |
+| --- | --- |
+| Kelvollisia päiviä | päivät, joilta lohkosta saatiin vähintään rajan verran pilvettömiä pikseleitä |
+| Kuvaväli (mediaani, pisin) | kelvollisten päivien väli; pitkä väli peittää niittoja ja hidastaa muutoksen havaitsemista |
+| Niittoväli | viimeisen niittoa edeltävän ja ensimmäisen niiton jälkeisen kelvollisen kuvan väli (vrk): niiton ajoituksen epävarmuus |
+| Luottamus | parhaan hyväksytyn tapahtuman luottamus |
+
+Perustaso on pelkkä Sentinel-2, koska se vastaa Ruokaviraston seurannan optista aineistoa (puuttuessa HLS S30). Lisälähteiden katsotaan parantaneen havaintoa, jos niitto tunnistetaan vain lisälähteillä, jos niittoväli lyhenee vähintään 2 vrk tai jos luottamus nousee yli 0,05. Yhden lohkon vertailu kuvaa vain sitä lohkoa ja kautta. Yleisen johtopäätöksen tekeminen vaatii vertailun useilla lohkoilla ja maastossa todetuilla niittopäivillä.
 
 ### Näytön taso
 

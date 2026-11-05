@@ -139,9 +139,102 @@ footer{border-top:1px solid var(--line);padding:24px 0 40px;font-size:14px;color
 .toggle{position:absolute;right:16px;top:16px}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .badge-ex{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--warn-soft);color:var(--warn);margin-left:8px}
+/* ---- Työkalu: kolmivaiheinen polku ---- */
+body[data-tab="tyokalu"] .wrap{max-width:1200px}
+body[data-tab="tyokalu"] header.top{padding:20px 0 14px}
+body[data-tab="tyokalu"] header.top h1{font-size:clamp(22px,3.4vw,28px);margin:4px 0 0}
+body[data-tab="tyokalu"] .lead{display:none}
+header.top .wrap{padding-right:64px}
+input,select,textarea{font-size:16px}
+.wz-head{display:flex;flex-wrap:wrap;gap:16px 24px;align-items:flex-end;justify-content:space-between;margin-bottom:20px}
+.stepper{list-style:none;margin:0;padding:0;display:flex;gap:6px}
+.stepper button{display:flex;align-items:center;gap:8px;min-height:44px;padding:8px 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font:600 14px Inter,sans-serif;cursor:pointer}
+.stepper button:disabled{cursor:default;opacity:.6}
+.stepper .sn{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--surface-2);font-size:12px}
+.stepper button.done{color:var(--accent);border-color:var(--accent)}
+.stepper button.done .sn{background:var(--accent-soft)}
+.stepper button[aria-current="step"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.stepper button[aria-current="step"] .sn{background:rgba(255,255,255,.25)}
+:root[data-theme="dark"] .stepper button[aria-current="step"]{color:#0f1512}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .stepper button[aria-current="step"]{color:#0f1512}}
+.split{display:grid;gap:24px;grid-template-columns:minmax(0,1fr)}
+@media(min-width:900px){.split{grid-template-columns:minmax(0,420px) minmax(0,1fr)}.split.s2,.split.s3{grid-template-columns:minmax(0,1fr) 340px}}
+.col-form,.col-map,.col-side{min-width:0}
+h3.q{font-size:22px;margin:0 0 10px}
+.lbl{display:block;font-size:14px;font-weight:600;margin:0 0 6px;color:var(--ink)}
+.searchrow{display:flex;gap:8px}
+.searchrow input{flex:1;min-width:0}
+input.big{height:52px;font-size:18px;border:2px solid var(--accent);border-radius:10px;padding:0 14px}
+.btn.big{min-height:52px;padding:0 20px;font-size:16px;border-radius:10px;justify-content:center}
+.btn.wide{width:100%;margin-top:16px}
+.btn{min-height:44px}
+.btn.sm{min-height:36px}
+.msg{margin-top:10px}
+.choices{display:flex;flex-direction:column;gap:8px;margin:12px 0 0;border:0;padding:0}
+.choices legend{margin-bottom:8px}
+.choice{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:15px Inter,sans-serif;cursor:pointer;min-height:52px}
+.choice b{font-family:"JetBrains Mono",monospace;font-weight:500}
+.choice .tag{margin-left:auto;font-size:12px;font-weight:600;color:var(--accent);background:var(--accent-soft);padding:2px 8px;border-radius:999px;white-space:nowrap}
+.choice[aria-pressed="true"]{border:2px solid var(--accent);background:var(--accent-soft)}
+.pcard{margin-top:14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:14px 16px}
+.pcard .pid{font:500 18px "JetBrains Mono",monospace}
+.pcard dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0 0}
+.pcard dt{font-size:12px;color:var(--muted)}
+.pcard dd{margin:0;font-weight:600}
+.pcard .note{margin:10px 0 0;padding:10px 12px;border-radius:8px;background:var(--surface-2);font-size:14px;color:var(--muted)}
+.pcard .note.w{background:var(--warn-soft);color:var(--ink)}
+.mapbox{position:relative}
+#map{height:clamp(300px,62vh,620px);margin-top:0;border-radius:14px}
+@media(max-width:899px){#map{height:300px}}
+.maptools{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin-top:8px}
+details.adv{margin-top:16px}
+.qset{border:0;margin:0 0 24px;padding:0}
+.qset legend{font-size:18px;font-weight:700;margin-bottom:8px;padding:0}
+.radios{display:flex;flex-direction:column;gap:8px}
+.rcard{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--surface);cursor:pointer;margin:0;color:var(--ink);font-size:16px;font-weight:400}
+.rcard input{width:20px;height:20px;margin:2px 0 0;flex:none;accent-color:var(--accent)}
+.rcard>span{display:flex;flex-direction:column;gap:2px}
+.rcard:has(input:checked){border:2px solid var(--accent);padding:13px 15px}
+.navrow{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
+.navrow .grow{flex:1 1 260px}
+.linkbtn{background:none;border:0;padding:0;color:var(--blue);text-decoration:underline;font:inherit;cursor:pointer}
+.fetchbox{margin-bottom:16px}
+.fetchbox .checks{margin-top:4px}
+.reshead{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:space-between;align-items:center;margin-bottom:6px}
+.meter{display:flex;gap:4px;align-items:center}
+.meter i{width:32px;height:8px;border-radius:4px;background:var(--line)}
+.meter i.on{background:var(--accent)}
+.meter.lv-weak i.on{background:var(--warn)}
+.meter.lv-fail i.on,.meter.lv-none i.on{background:var(--bad)}
+.meter span{margin-left:8px;font-size:13px;font-weight:600}
+.verdict{font-size:clamp(22px,3vw,28px);line-height:1.2;letter-spacing:-.01em}
+.vdetail{margin-top:6px;font-size:16px;color:var(--muted)}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:16px 0 0}
+.facts>div{padding:12px 14px;border-radius:10px;background:var(--surface-2)}
+.facts>div.ok{background:var(--accent-soft)}
+.facts>div.w{background:var(--warn-soft)}
+.facts>div.f{background:var(--bad-soft)}
+.facts dt{font-size:13px;color:var(--muted)}
+.facts dd{margin:4px 0 0;font-size:19px;font-weight:700}
+.bigwarn{border:1px solid var(--warn);border-radius:10px;padding:12px 14px;margin:12px 0 0;background:var(--warn-soft)}
+.vipu{border:2px solid var(--accent)}
+.vipu textarea{min-height:150px;font:14px/1.5 Inter,sans-serif}
+.vipu .actions .btn{flex:1 1 auto}
+#cmpTable td.best{font-weight:700;color:var(--accent)}
+#cmpTable td.num{text-align:right;white-space:nowrap}
+.cmpv{padding:12px 14px;border-radius:10px;margin-bottom:12px;background:var(--surface-2)}
+.cmpv.better{background:var(--accent-soft)}
+.cmpv ul{margin:6px 0 0;padding-left:20px}
+@media print{
+  nav.tabs,header.top,.stepper,#fetchBox,#tech,.vipu .actions,.col-side .actions,#tunnukset,footer .wrap button,#themeBtn{display:none!important}
+  body{background:#fff;color:#000}
+  .step[hidden]{display:none!important}
+  .split.s3{grid-template-columns:1fr}
+  .card{border-color:#999}
+}
 </style>
 </head>
-<body>
+<body data-tab="tyokalu">
 <header class="top">
   <div class="wrap">
     <button class="btn sm toggle" id="themeBtn" type="button" aria-label="Vaihda teema">◐</button>
@@ -153,11 +246,11 @@ footer{border-top:1px solid var(--line);padding:24px 0 40px;font-size:14px;color
 
 <nav class="tabs" aria-label="Osiot">
   <div class="wrap" role="tablist">
-    <button role="tab" aria-selected="true" aria-controls="nyt" data-tab="nyt" id="tab-nyt">Nykytila</button>
+    <button role="tab" aria-selected="true" aria-controls="tyokalu" data-tab="tyokalu" id="tab-tyokalu">Tee niittoraportti</button>
+    <button role="tab" aria-selected="false" aria-controls="nyt" data-tab="nyt" id="tab-nyt" tabindex="-1">Nykytila</button>
     <button role="tab" aria-selected="false" aria-controls="laki" data-tab="laki" id="tab-laki" tabindex="-1">Oikeusperusta</button>
     <button role="tab" aria-selected="false" aria-controls="data" data-tab="data" id="tab-data" tabindex="-1">Vastaava data</button>
     <button role="tab" aria-selected="false" aria-controls="prosessi" data-tab="prosessi" id="tab-prosessi" tabindex="-1">Ehdotettu prosessi</button>
-    <button role="tab" aria-selected="false" aria-controls="tyokalu" data-tab="tyokalu" id="tab-tyokalu" tabindex="-1">Niittoraportti</button>
     <button role="tab" aria-selected="false" aria-controls="menetelma" data-tab="menetelma" id="tab-menetelma" tabindex="-1">Menetelmä</button>
     <button role="tab" aria-selected="false" aria-controls="lahteet" data-tab="lahteet" id="tab-lahteet" tabindex="-1">Lähteet</button>
   </div>
@@ -165,7 +258,7 @@ footer{border-top:1px solid var(--line);padding:24px 0 40px;font-size:14px;color
 
 <main class="wrap">
 
-<section class="panel active" id="nyt" role="tabpanel" aria-labelledby="tab-nyt">
+<section class="panel" id="nyt" role="tabpanel" aria-labelledby="tab-nyt">
   <h2>Näin niitto todennetaan nyt</h2>
   <p class="muted">Satelliitti ensin, viljelijän kuva toissijaisesti.</p>
   <div class="grid g3" style="margin:16px 0 24px">
@@ -269,198 +362,290 @@ footer{border-top:1px solid var(--line);padding:24px 0 40px;font-size:14px;color
   </div>
 </section>
 
-<section class="panel" id="tyokalu" role="tabpanel" aria-labelledby="tab-tyokalu">
-  <h2>Niittoraportti</h2>
-  <p class="muted">Hae lohkon havainnot satelliittikuvista tai syötä ne itse: optisista lähteistä NDVI-mediaani ja pikseliosuudet, Sentinel-1:stä VH-koherenssi. Työkalu ajaa jokaiselle sensorille oman ilmaisimen, yhdistää päällekkäiset tunnistukset ja vertaa varminta tapahtumaa tukiehdon päivämääriin. Kaikki laskenta tapahtuu selaimessa. Vain lohkon valinnassa ja datahaussa tietoa lähetetään palveluihin: tunnus tai klikkauspiste Ruokavirastolle, karttatiilien pyynnöt MML:lle tai OpenStreetMapille ja lohkon rajaus satelliittikuvapalveluun. Menetelmä ja raja-arvojen lähteet ovat <a href="#menetelma" data-goto="menetelma">Menetelmä</a>-välilehdellä.</p>
-  <div class="callout">Raportti ei nykyisellään korvaa Vipu-mobiilin kuvaa, ja sen huomioiminen on käsittelijän harkinnassa. Ota kuva aina kun mahdollista. Raja-arvoja ei ole kalibroitu Suomen maastoaineistolla.</div>
+<section class="panel active" id="tyokalu" role="tabpanel" aria-labelledby="tab-tyokalu">
+  <div class="wz-head">
+    <div>
+      <h2>Niittoraportti</h2>
+      <p class="muted" style="margin:0">Tarkista satelliittikuvista, näkyykö lohkollasi niitto, ja saat valmiin tekstin Vipu-mobiiliin.</p>
+    </div>
+    <ol class="stepper" id="stepNav" aria-label="Vaiheet">
+      <li><button type="button" data-step="1" aria-current="step"><span class="sn">1</span><span>Lohko</span></button></li>
+      <li><button type="button" data-step="2" disabled><span class="sn">2</span><span>Tiedot</span></button></li>
+      <li><button type="button" data-step="3" disabled><span class="sn">3</span><span>Tulos</span></button></li>
+    </ol>
+  </div>
 
-  <div class="card">
-    <h3 style="margin-top:0">1. Valitse lohko</h3>
-    <div class="srcbox" style="margin-bottom:12px">
-      <div class="muted small">Peruslohkotunnuksella tai kartalta · Ruokaviraston kasvulohkot, taustakartta MML tai OpenStreetMap</div>
-      <div class="row r2" style="margin-top:8px">
-        <div>
-          <label for="pltIn">Peruslohkotunnus (kasvulohkon kanssa muodossa 1641431471-2)</label>
-          <div class="actions" style="margin-top:0"><input id="pltIn" inputmode="numeric" autocomplete="off" placeholder="esim. 1641431471" style="flex:1;min-width:160px;width:auto"><button class="btn sm primary" id="pltGo" type="button">Hae rajaus</button></div>
+  <!-- ===== Vaihe 1: lohko ===== -->
+  <div class="step" id="step1" data-step="1">
+    <div class="split">
+      <div class="col-form">
+        <h3 class="q">Mikä lohko tarkistetaan?</h3>
+        <p class="muted small" style="margin-top:-6px">Kirjoita lohkon tunnus tai paikka. Voit myös klikata lohkoa kartalla.</p>
+        <label for="pltIn" class="lbl">Lohkon tunnus, osoite tai paikannimi</label>
+        <div class="searchrow">
+          <input id="pltIn" class="big" type="search" autocomplete="off" spellcheck="false" placeholder="esim. 1641431471 tai Lapioneva" aria-describedby="pltHint">
+          <button class="btn primary big" id="pltGo" type="button">Hae</button>
         </div>
-        <div style="align-self:end"><button class="btn sm" id="mapOpen" type="button" aria-expanded="false" aria-controls="mapWrap">Valitse kartalta</button></div>
+        <p class="small muted" id="pltHint" style="margin:6px 0 0">Esim. 1641431471, 1641431471-2, Seinäjoki tai koordinaatit 6965000 290000</p>
+        <button class="btn" id="locBtn" type="button" style="margin-top:12px">
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+          Olen pellolla – käytä sijaintiani
+        </button>
+        <div id="pickMsg" class="small msg" aria-live="polite"></div>
+        <div id="placeList" class="choices" hidden></div>
+        <fieldset id="pltList" class="choices" hidden><legend class="lbl">Valitse kasvulohko</legend></fieldset>
+        <div id="parcelCard" class="pcard" hidden></div>
+        <button class="btn primary big wide" id="toStep2" type="button" disabled>Jatka tietojen tarkistukseen →</button>
       </div>
-      <div id="pltList" class="actions" hidden></div>
-      <div id="pickMsg" class="small muted" style="margin-top:8px" aria-live="polite"></div>
-      <div id="mapWrap" hidden>
-        <div class="row r3" style="margin-top:12px">
-          <div><label for="mapBase">Taustakartta</label><select id="mapBase"></select></div>
-          <div><label for="mmlKey">MML-API-avain</label><input id="mmlKey" type="password" autocomplete="off" spellcheck="false" placeholder="ilman avainta OpenStreetMap"></div>
-          <div style="align-self:end"><label class="chk"><input type="checkbox" id="mmlRemember"> Muista tällä selaimella</label></div>
+      <div class="col-map">
+        <div class="mapbox">
+          <div id="map" role="application" aria-label="Kartta lohkon valintaan"></div>
         </div>
-        <div class="actions" style="margin-top:12px">
-          <input id="placeQ" placeholder="Hae paikka, osoite tai koordinaatit" aria-label="Hae paikka" style="flex:1;min-width:180px;width:auto">
-          <button class="btn sm" id="placeGo" type="button">Hae paikka</button>
-        </div>
-        <div id="placeList" class="actions" hidden></div>
-        <div id="map" role="application" aria-label="Kartta lohkon valintaan"></div>
-        <div class="maplegend">
+        <div class="maptools">
           <label class="chk" style="margin:0"><input type="checkbox" id="niittoOn" checked> Korosta niittovelvoitteiset lohkot</label>
           <span id="niittoLegend" class="legend" style="margin:0"></span>
         </div>
-        <div class="actions">
+        <div class="actions" style="margin-top:8px">
           <button class="btn sm" id="drawBtn" type="button">Piirrä rajaus itse</button>
           <button class="btn sm primary" id="drawDone" type="button" hidden>Valmis</button>
           <button class="btn sm" id="drawCancel" type="button" hidden>Peru</button>
           <span class="small muted" id="mapHint">Lähennä ja klikkaa kasvulohkoa. Rullalla zoomaus toimii, kun olet klikannut karttaa.</span>
         </div>
+        <details class="adv" style="margin-top:8px">
+          <summary><span class="ttl">Kartan asetukset</span><span class="muted small">taustakartta ja MML-API-avain</span></summary>
+          <div class="body">
+            <div class="row r2">
+              <div><label for="mapBase" class="lbl">Taustakartta</label><select id="mapBase"></select></div>
+              <div><label for="mmlKey" class="lbl">MML-API-avain</label><input id="mmlKey" type="password" autocomplete="off" spellcheck="false" placeholder="ilman avainta OpenStreetMap"></div>
+            </div>
+            <label class="chk" style="margin-top:10px"><input type="checkbox" id="mmlRemember"> Muista avain tällä selaimella</label>
+            <p class="small muted" style="margin:0">Avaimen saa maksutta MML:n <a href="https://omatili.maanmittauslaitos.fi/" rel="noopener">Oma tili</a> -palvelusta (<a href="https://www.maanmittauslaitos.fi/rajapinnat/api-avaimen-ohje" rel="noopener">ohje</a>). Avain lähetetään vain MML:n karttapalveluun.</p>
+          </div>
+        </details>
       </div>
     </div>
-    <div class="row r2" style="margin-top:12px">
-      <div><label for="lohko">Kasvulohkon tunnus <span class="muted small">(täyttyy valinnasta)</span></label><input id="lohko" placeholder="esim. 1234567890-1"></div>
-      <div><label for="measure">Kasvi / toimenpide</label><select id="measure"></select></div>
-    </div>
-    <p class="small muted" id="ruleNote" style="margin:8px 0 0"></p>
-    <div id="cropWarn" class="callout warnbox" hidden>
-      <div id="cropWarnText"></div>
-      <label class="chk" style="margin:8px 0 0"><input type="checkbox" id="cropOk"> Vahvistan, että lohkolla on tänä vuonna valittu toimenpide</label>
-    </div>
-    <div class="row r2">
-      <div>
-        <label for="geo">Lohkon rajaus <span class="muted small">(täyttyy valinnasta, tai liitä GeoJSON)</span></label>
-        <textarea id="geo" spellcheck="false" placeholder='{"type":"Polygon","coordinates":[[[290000,6965000],[290300,6965000],[290300,6965200],[290000,6965200],[290000,6965000]]]}'></textarea>
-        <div class="actions" style="margin-top:6px"><label class="btn sm">Avaa tiedosto<input type="file" id="geoFile" accept=".geojson,.json,application/geo+json,application/json" hidden></label><span id="geoMsg" class="small muted"></span></div>
-      </div>
-      <div>
-        <div class="row r2">
-          <div><label for="dStart">Alkaen</label><input id="dStart" type="date"></div>
-          <div><label for="dEnd">Päättyen</label><input id="dEnd" type="date"></div>
-        </div>
-        <p class="small muted" style="margin:8px 0 0">Lohkon pilvet suodatetaan pikseleittäin (HLS: Fmask, PlanetScope: UDM2). Reunapuskuri, pilvisyysraja ja tunnistuksen raja-arvot ovat lisäasetuksissa.</p>
-      </div>
-    </div>
-    <h3 id="haku">2. Hae havainnot</h3>
-    <p class="small muted" style="margin-top:0">HLS-kuvat haetaan ilman tunnusta. Jokaisesta kuvasta lasketaan NDVI-mediaani sekä kelvollisten ja muuttuneiden pikselien osuudet, ja tulokset lisätään havaintotaulukkoon. Lohkon rajaus lähetetään hakupalveluun, mutta pikselit lasketaan selaimessa. <a href="#tunnukset" id="toCreds">Tunnukset ja ohjeet</a>.</p>
-    <div class="fetchsrc">
-      <div class="srcbox">
-        <div><strong>HLS</strong> <span class="muted small">NASA HLS v2.0 (S30 + L30), 30 m · Microsoft Planetary Computer · ei tunnusta</span></div>
-        <div class="actions"><button class="btn primary" id="hlsGo" type="button">Hae HLS-havainnot</button></div>
-      </div>
-      <details class="srcbox" id="psBox">
-        <summary><strong>PlanetScope</strong> <span class="muted small">neuvojille ja tutkijoille · vaatii Planet-API-avaimen ja kuluttaa tilauksen kiintiötä</span></summary>
-        <div class="row r2" style="margin-top:8px">
-          <div><label for="plKey">Planet-API-avain</label><input id="plKey" type="password" autocomplete="off" spellcheck="false" placeholder="liitä avain tähän"></div>
-          <div style="align-self:end"><label class="chk"><input type="checkbox" id="plRemember"> Muista tämän välilehden ajan</label></div>
-        </div>
-        <div class="actions">
-          <button class="btn sm" id="psSearch" type="button">1. Hae kuvalista</button>
-          <button class="btn sm" id="psOrder" type="button" disabled>2. Tilaa kuvat</button>
-        </div>
-        <div class="actions">
-          <input id="psOrderId" placeholder="tilauksen tunnus" aria-label="Tilauksen tunnus" style="flex:1;min-width:160px;width:auto">
-          <button class="btn sm" id="psResume" type="button">3. Tarkista ja käsittele</button>
-        </div>
-      </details>
-    </div>
-    <progress id="fetchProg" max="1" value="0" hidden></progress>
-    <div class="actions" style="margin-top:4px"><button class="btn sm" id="fetchStop" type="button" hidden>Keskeytä</button></div>
-    <ul class="checks" id="fetchLog" aria-live="polite"></ul>
+    <details class="adv" id="geoBox">
+          <summary><span class="ttl">Muut tavat valita lohko</span><span class="muted small">GeoJSON-tiedosto tai liitetty rajaus</span></summary>
+          <div class="body">
+            <label for="geo" class="lbl">Lohkon rajaus (GeoJSON, WGS84 tai ETRS-TM35FIN)</label>
+            <textarea id="geo" spellcheck="false" placeholder='{"type":"Polygon","coordinates":[[[290000,6965000],[290300,6965000],[290300,6965200],[290000,6965200],[290000,6965000]]]}'></textarea>
+            <div class="actions" style="margin-top:6px"><label class="btn sm">Avaa tiedosto<input type="file" id="geoFile" accept=".geojson,.json,application/geo+json,application/json" hidden></label><span id="geoMsg" class="small muted"></span></div>
+            <p class="small muted" style="margin:10px 0 0">Ilman välityspalvelinta rajauksen saa skriptillä: <code>python scripts/hae_kasvulohkot.py --peruslohko 1641431471 --vuodet 2025</code></p>
+          </div>
+        </details>
+  </div>
 
-<details id="advanced" style="margin-top:16px"><summary><span class="ttl">Lisäasetukset</span><span class="muted small">reunapuskuri, pilvisyysraja ja tunnistuksen raja-arvot · oletukset: De Vroey ym. 2022 ja omat, ks. Menetelmä</span></summary>
-      <div class="body">
-        <div class="row r4">
-          <div><label for="buffer">Reunapuskuri (m)</label><input id="buffer" type="number" step="1" min="0" value="10"></div>
-          <div><label for="maxCloud">Kuvan pilvisyys enintään %</label><input id="maxCloud" type="number" min="0" max="100" step="5" value="80"></div>
-          <div><label for="p_ndviDrop">NDVI-pudotus ≥</label><input id="p_ndviDrop" type="number" step="0.01" min="0"></div>
-          <div><label for="p_confMin">Todennäköisyysraja</label><input id="p_confMin" type="number" step="0.05" min="0" max="1"></div>
-          <div><label for="p_minValid">Kelvolliset pikselit ≥ %</label><input id="p_minValid" type="number" step="1" min="0" max="100"></div>
-          <div><label for="p_minChanged">Muuttunut osuus ≥ %</label><input id="p_minChanged" type="number" step="1" min="0" max="100"></div>
-          <div><label for="p_maxGap">Suurin havaintoväli (vrk)</label><input id="p_maxGap" type="number" step="1" min="1"></div>
-          <div><label for="p_persistWindow">Pysyvyysikkuna (vrk)</label><input id="p_persistWindow" type="number" step="1" min="1"></div>
-          <div><label for="p_s1k">S1-kynnys kσ</label><input id="p_s1k" type="number" step="0.1" min="0"></div>
-          <div style="align-self:end"><button class="btn sm" id="resetP" type="button">Palauta oletukset</button></div>
+  <!-- ===== Vaihe 2: tiedot ===== -->
+  <div class="step" id="step2" data-step="2" hidden>
+    <div class="split s2">
+      <div class="col-form">
+        <h3 class="q">Tarkista lohkon tiedot</h3>
+        <p class="muted small" style="margin-top:-6px">Kolme kysymystä. Oletukset on täytetty valmiiksi.</p>
+
+        <fieldset class="qset" id="measure">
+          <legend>1. Mikä tukiehto lohkolla on tänä vuonna?</legend>
+          <p class="small muted" style="margin:0 0 8px">Valitse sama kuin tukihakemuksessasi.</p>
+          <div id="cropWarn" class="callout warnbox" hidden role="alert">
+            <div id="cropWarnText"></div>
+            <label class="chk" style="margin:8px 0 0"><input type="checkbox" id="cropOk"> Vahvistan, että lohkolla on tänä vuonna valittu toimenpide</label>
+          </div>
+          <div id="measureOpts" class="radios"></div>
+          <p class="small muted" id="ruleNote" style="margin:8px 0 0"></p>
+          <div id="notSuited" class="callout" hidden>Niittoraportti on tarkoitettu niittovelvoitteisille lohkoille. Jos lohkolla on viljaa tai muu kasvi, satelliitin näkemä muutos on todennäköisesti sadonkorjuuta. Vastaa silloin selvityspyyntöön Vipu-mobiilin kuvalla tai korjaa hakemus Vipu-palvelussa.</div>
+        </fieldset>
+
+        <fieldset class="qset">
+          <legend>2. Mikä aikaväli tarkistetaan?</legend>
+          <div class="row r2">
+            <div><label for="dStart" class="lbl">Alkaen</label><input id="dStart" type="date"></div>
+            <div><label for="dEnd" class="lbl">Päättyen</label><input id="dEnd" type="date"></div>
+          </div>
+          <p class="small muted" style="margin:6px 0 0">Oletus kattaa kasvukauden ja määräpäivän 15.9.</p>
+        </fieldset>
+
+        <fieldset class="qset">
+          <legend>3. Mistä satelliittikuvat haetaan?</legend>
+          <div class="radios" id="srcModes">
+            <label class="rcard"><input type="radio" name="srcMode" value="hls" id="srcHls" checked><span><b>HLS: Sentinel-2 ja Landsat</b><span class="small muted">30 m · tihein maksuton kuvasarja · suositus</span></span></label>
+            <label class="rcard"><input type="radio" name="srcMode" value="s2" id="srcS2"><span><b>Pelkkä Sentinel-2</b><span class="small muted">10 m · sama aineisto kuin Ruokaviraston seurannassa</span></span></label>
+            <label class="rcard"><input type="radio" name="srcMode" value="both" id="srcBoth"><span><b>Molemmat ja lähdevertailu</b><span class="small muted">näyttää, tarkentavatko lisälähteet niittoajankohtaa · hitaampi</span></span></label>
+          </div>
+          <p class="small muted" style="margin:6px 0 0">Kuvat ovat maksuttomia eivätkä vaadi tunnuksia. Lohkon pilvet suodatetaan pikseleittäin. PlanetScope-kuvat (3 m) saa lisättyä lisäasetuksista omalla Planet-avaimella.</p>
+        </fieldset>
+
+        <details class="adv" id="advanced">
+          <summary><span class="ttl">Lisäasetukset neuvojille</span><span class="muted small">reunapuskuri, pilvisyys ja raja-arvot · oletukset: De Vroey ym. 2022 ja omat</span></summary>
+          <div class="body">
+            <div class="row r4">
+              <div><label for="buffer" class="lbl">Reunapuskuri (m)</label><input id="buffer" type="number" step="1" min="0" value="10"></div>
+              <div><label for="maxCloud" class="lbl">Kuvan pilvisyys enintään %</label><input id="maxCloud" type="number" min="0" max="100" step="5" value="80"></div>
+              <div><label for="p_ndviDrop" class="lbl">NDVI-pudotus ≥</label><input id="p_ndviDrop" type="number" step="0.01" min="0"></div>
+              <div><label for="p_confMin" class="lbl">Todennäköisyysraja</label><input id="p_confMin" type="number" step="0.05" min="0" max="1"></div>
+              <div><label for="p_minValid" class="lbl">Kelvolliset pikselit ≥ %</label><input id="p_minValid" type="number" step="1" min="0" max="100"></div>
+              <div><label for="p_minChanged" class="lbl">Muuttunut osuus ≥ %</label><input id="p_minChanged" type="number" step="1" min="0" max="100"></div>
+              <div><label for="p_maxGap" class="lbl">Suurin havaintoväli (vrk)</label><input id="p_maxGap" type="number" step="1" min="1"></div>
+              <div><label for="p_persistWindow" class="lbl">Pysyvyysikkuna (vrk)</label><input id="p_persistWindow" type="number" step="1" min="1"></div>
+              <div><label for="p_s1k" class="lbl">S1-kynnys kσ</label><input id="p_s1k" type="number" step="0.1" min="0"></div>
+              <div style="align-self:end"><button class="btn sm" id="resetP" type="button">Palauta oletukset</button></div>
+            </div>
+          </div>
+        </details>
+        <details class="adv" id="psBox">
+          <summary><span class="ttl">PlanetScope</span><span class="muted small">neuvojille ja tutkijoille · vaatii Planet-API-avaimen ja kuluttaa tilauksen kiintiötä</span></summary>
+          <div class="body">
+            <div class="row r2">
+              <div><label for="plKey" class="lbl">Planet-API-avain</label><input id="plKey" type="password" autocomplete="off" spellcheck="false" placeholder="liitä avain tähän"></div>
+              <div style="align-self:end"><label class="chk"><input type="checkbox" id="plRemember"> Muista tämän välilehden ajan</label></div>
+            </div>
+            <div class="actions">
+              <button class="btn sm" id="psSearch" type="button">1. Hae kuvalista</button>
+              <button class="btn sm" id="psOrder" type="button" disabled>2. Tilaa kuvat</button>
+            </div>
+            <div class="actions">
+              <input id="psOrderId" placeholder="tilauksen tunnus" aria-label="Tilauksen tunnus" style="flex:1;min-width:160px;width:auto">
+              <button class="btn sm" id="psResume" type="button">3. Tarkista ja käsittele</button>
+            </div>
+            <p class="small muted" style="margin:8px 0 0">PlanetScope-havainnot lisätään tulokseen ja lähdevertailuun. <a href="#tunnukset" id="toCreds">Tunnukset ja ohjeet</a>.</p>
+          </div>
+        </details>
+
+        <div class="navrow">
+          <button class="btn big" id="back1" type="button">← Takaisin</button>
+          <button class="btn primary big grow" id="runGo" type="button">Hae kuvat ja laske tulos →</button>
         </div>
+        <p class="small muted" style="margin:6px 0 0">Kestää yleensä 10–60 sekuntia. <button type="button" class="linkbtn" id="manualGo">Syötä havainnot itse</button></p>
       </div>
-    </details>
-    <details id="tunnukset" style="margin-top:16px"><summary><span class="ttl">Tunnukset ja ohjeet</span><span class="muted small">HLS ilman tunnusta, NASA Earthdata ja Planet-API-avain</span></summary>
-      <div class="body">
-        <h3 style="margin-top:4px">Lohkon valinta ja MML-API-avain</h3>
-        <p class="small">Lohkon rajauksen saa kolmella tavalla. <strong>Peruslohkotunnuksella</strong> sovellus hakee peruslohkon kasvulohkot Ruokaviraston avoimesta INSPIRE-rajapinnasta, ja jos niitä on useita, valitset niitettävän. <strong>Kartalta</strong> lohkon voi valita klikkaamalla: lähennä, kunnes kasvulohkot näkyvät, ja klikkaa lohkoa. <strong>Piirtämällä</strong> rajauksen voi tehdä itse klikkaamalla lohkon kulmat. Kasvulohkoaineisto on Ruokaviraston (CC BY 4.0), ja uusin julkaistu vuosi valitaan automaattisesti.</p>
-        <p class="small">Maanmittauslaitoksen taustakartat ja ortokuvat vaativat maksuttoman API-avaimen. Ilman avainta kartta näytetään OpenStreetMapin pohjalla.</p>
-        <ol class="small">
-          <li>Rekisteröidy MML:n <a href="https://omatili.maanmittauslaitos.fi/" rel="noopener">Oma tili</a> -palveluun ja valitse avoimet rajapintapalvelut.</li>
-          <li>Kirjaudu sisään ja luo uusi API-avain. Ohje: <a href="https://www.maanmittauslaitos.fi/rajapinnat/api-avaimen-ohje" rel="noopener">MML:n API-avaimen ohje</a>.</li>
-          <li>Liitä avain kenttään <em>MML-API-avain</em> (näkyy, kun avaat kartan). Valinnalla <em>Muista tällä selaimella</em> avain tallentuu tämän selaimen muistiin (localStorage). Avain lähetetään vain MML:n karttapalveluun karttakuvien mukana.</li>
-        </ol>
-        <p class="small muted">Ruokaviraston rajapinta ei salli hakua selaimesta. Tunnushaku ja kartan klikkaus toimivat välityspalvelimen kautta, jos sellainen on otettu käyttöön (ohje: <code>worker/README.md</code>). Muuten piirrä rajaus kartalle tai hae se skriptillä:</p>
-        <pre>pip install geopandas pyogrio requests
-python scripts/hae_kasvulohkot.py --peruslohko 1641431471 --vuodet 2025</pre>
-        <p class="small muted">Skripti lataa Ruokaviraston avoimen kasvulohkoaineiston ja kirjoittaa jokaisesta kasvulohkosta tiedoston <code>lohko_&lt;tunnus&gt;.geojson</code>, jonka voi avata yllä painikkeella <em>Avaa tiedosto</em>.</p>
-        <h3 style="margin-top:20px">HLS tässä sovelluksessa: ei tunnusta</h3>
-        <p class="small">Sovellus hakee NASAn HLS v2.0 -aineiston Microsoftin Planetary Computerista. Siellä aineisto on avoimesti saatavilla, ja selain pyytää lyhytaikaisen lukuoikeuden (SAS-token) automaattisesti. Riittää, että liität lohkon rajauksen, valitset aikavälin ja painat <em>Hae HLS-havainnot</em>.</p>
-        <h3>HLS suoraan NASAlta: Earthdata-tunnus (vain skripti)</h3>
-        <p class="small">NASAn omaa latauspalvelua ei voi käyttää suoraan selaimesta, koska se ohjaa kirjautumiseen toiseen osoitteeseen. Jos Planetary Computerista puuttuu kuvia tai haluat käyttää alkuperäislähdettä, käytä skriptiä <code>scripts/hae_havainnot.py</code>.</p>
-        <ol class="small">
-          <li>Luo maksuton tunnus osoitteessa <a href="https://urs.earthdata.nasa.gov/users/new" rel="noopener">urs.earthdata.nasa.gov</a> (<em>Register</em>).</li>
-          <li>Kirjaudu sisään ja avaa <em>Generate Token</em>. Luo token ja kopioi se. Token on voimassa rajoitetun ajan, ja voimassaoloaika näkyy sivulla.</li>
-          <li>Anna token skriptille ympäristömuuttujana:<pre>export EARTHDATA_TOKEN="token-tähän"
+      <aside class="col-side">
+        <div class="pcard" id="parcelSide"></div>
+        <div style="margin-top:12px"><label for="lohko" class="lbl">Kasvulohkon tunnus <span class="muted small">(täyttyy valinnasta)</span></label><input id="lohko" placeholder="esim. 1234567890-1"></div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- ===== Vaihe 3: tulos ===== -->
+  <div class="step" id="step3" data-step="3" hidden>
+    <div id="fetchBox" class="card fetchbox" hidden>
+      <progress id="fetchProg" max="1" value="0" hidden></progress>
+      <ul class="checks" id="fetchLog" aria-live="polite"></ul>
+      <div class="actions" style="margin-top:4px"><button class="btn sm" id="fetchStop" type="button" hidden>Keskeytä</button></div>
+    </div>
+    <div class="split s3">
+      <div class="col-form">
+        <section class="card result" aria-live="polite" aria-labelledby="resHead">
+          <div class="reshead">
+            <p class="small muted" id="resMeta" style="margin:0"></p>
+            <div id="meter" class="meter" role="img" aria-label="Näytön vahvuus"><i></i><i></i><i></i><span></span></div>
+          </div>
+          <h3 id="resHead" class="sr">Tulos</h3>
+          <div id="verdict" class="muted">Lisää vähintään kaksi saman lähteen havaintoa.</div>
+          <dl id="facts" class="facts"></dl>
+          <div id="bigwarns"></div>
+        </section>
+
+        <section class="card result" aria-labelledby="chartHead">
+          <h3 id="chartHead" style="margin-top:0">Kasvuston vihreys</h3>
+          <svg id="chart" viewBox="0 0 720 280" role="img" aria-label="Havaintojen aikasarja"></svg>
+          <div class="legend" id="legend"></div>
+        </section>
+
+        <section class="card result" id="compare" hidden aria-labelledby="cmpHead">
+          <h3 id="cmpHead" style="margin-top:0">Lähdevertailu: tuovatko lisälähteet paremman näkymän?</h3>
+          <div id="cmpSummary"></div>
+          <div class="scroll"><table class="tbl" id="cmpTable"></table></div>
+          <p class="small muted" style="margin:10px 0 0">Niittoväli on viimeisen niittoa edeltävän ja ensimmäisen niiton jälkeisen kelvollisen kuvan väli: mitä lyhyempi, sitä tarkemmin niitto on ajoitettu. Kelvollinen päivä = lohkosta vähintään raja-arvon verran pilvettömiä pikseleitä. Kun mukana on HLS, pääarvio käyttää sitä, koska Sentinel-2 L2A sisältää samat kuvat.</p>
+        </section>
+
+        <details class="adv" id="tech">
+          <summary><span class="ttl">Tekniset tiedot</span><span class="muted small" id="techSum">tarkistukset, tapahtumat ja havaintotaulukko</span></summary>
+          <div class="body">
+            <ul class="checks" id="checks"></ul>
+            <div id="events"></div>
+            <h3>Havainnot <span id="exBadge" class="badge-ex" hidden>keksitty esimerkkidata</span></h3>
+            <div class="scroll">
+            <table class="obs" id="obsTable">
+              <thead><tr><th>Päivä</th><th>Lähde</th><th>Kuvatunniste</th><th>NDVI / koher.</th><th>Kelvolliset %</th><th>Muuttunut %</th><th><span class="sr">Poista</span></th></tr></thead>
+              <tbody></tbody>
+            </table>
+            </div>
+            <div class="actions">
+              <button class="btn sm" id="addRow" type="button">+ Lisää havainto</button>
+              <button class="btn sm" id="example" type="button">Täytä esimerkkidata</button>
+              <button class="btn sm" id="clear" type="button">Tyhjennä</button>
+            </div>
+            <details class="adv" style="margin-top:16px" id="csvBox"><summary><span class="ttl">Liitä CSV</span><span class="muted small">päivä; lähde; tunniste; arvo; kelvolliset %; muuttunut %</span></summary>
+              <div class="body">
+                <p class="small muted">Erottimena puolipiste, sarkain tai pilkku. #-alkuiset rivit ohitetaan, joten skriptin hae_havainnot.py tuottaman tiedoston voi liittää sellaisenaan. Puolipiste- ja sarkainerotellussa tiedostossa desimaalipilkku on sallittu. Lähteet: <span id="srcList"></span>.</p>
+                <textarea id="csv" placeholder="2026-08-04;PlanetScope;20260804_094512_21_24a4;0,84;100;"></textarea>
+                <div class="actions"><button class="btn sm" id="importCsv" type="button">Tuo rivit</button><span id="csvMsg" class="small muted"></span></div>
+              </div>
+            </details>
+            <details class="adv" style="margin-top:12px"><summary><span class="ttl">Haku omalla koodilla</span><span class="muted small">skripti ja rajapintapohjat</span></summary>
+              <div class="body">
+                <p class="muted small">Skripti <code>scripts/hae_havainnot.py</code> tuottaa CSV:n suoraan tuontimuodossa. Lisää lohkon rajaus (GeoJSON) muuttujaan <code>lohko</code> ja kutista sitä reunapuskurin verran ennen pikselien laskemista.</p>
+                <h3>HLS (NASA Earthdata, STAC)</h3>
+                <pre id="hlsCode"></pre>
+                <h3>PlanetScope (Data API)</h3>
+                <pre id="planetCode"></pre>
+                <p class="muted small" style="margin-top:12px">Planetin rajapinnat ja tuotenimet muuttuvat, joten tarkista ne Planetin dokumentaatiosta. Sentinel-1-koherenssi saadaan esimerkiksi ESA SNAPilla tai Sen4CAP-järjestelmästä (VH, 6 tai 12 vrk:n pari) [13].</p>
+              </div>
+            </details>
+          </div>
+        </details>
+      </div>
+
+      <aside class="col-side">
+        <section class="card vipu" aria-labelledby="vipuHead">
+          <h3 id="vipuHead" style="margin-top:0">Vastaa selvityspyyntöön</h3>
+          <ol class="small" style="margin:0 0 12px;padding-left:20px">
+            <li>Kopioi alla oleva teksti.</li>
+            <li>Avaa selvityspyyntö Vipu-mobiilissa.</li>
+            <li>Liitä teksti lisätietoihin. Ota kuva lohkolta, jos voit.</li>
+          </ol>
+          <label for="out" class="lbl">Teksti Vipu-mobiiliin <span id="outLen" class="muted"></span></label>
+          <textarea id="out" readonly></textarea>
+          <p id="outEmpty" class="small muted" style="margin:6px 0 0"></p>
+          <div class="actions">
+            <button class="btn primary big wide" id="copy" type="button">Kopioi teksti</button>
+            <button class="btn" id="printBtn" type="button">Tulosta tai tallenna PDF</button>
+            <button class="btn" id="dlJson" type="button">Lataa raportti (JSON)</button>
+          </div>
+        </section>
+        <p class="callout small" style="margin:12px 0">Raportti on lisäselvitys. Käsittelijä päättää, huomioidaanko se, eikä se nykyisellään korvaa Vipu-mobiilin kuvaa. Raja-arvoja ei ole kalibroitu Suomen maastoaineistolla.</p>
+        <div class="actions">
+          <button class="btn" id="back2" type="button">← Muuta tietoja</button>
+          <button class="btn" id="newField" type="button">Tarkista toinen lohko</button>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <details class="adv" id="tunnukset" style="margin-top:24px"><summary><span class="ttl">Tunnukset ja ohjeet</span><span class="muted small">HLS ja Sentinel-2 ilman tunnusta, NASA Earthdata ja Planet-API-avain</span></summary>
+    <div class="body">
+      <h3 style="margin-top:4px">Lohkon valinta</h3>
+      <p class="small"><strong>Tunnuksella</strong> sovellus hakee peruslohkon kasvulohkot Ruokaviraston avoimesta INSPIRE-rajapinnasta, ja jos niitä on useita, valitset niitettävän. <strong>Paikannimellä, osoitteella tai koordinaateilla</strong> kartta siirtyy paikkaan, ja lohkon valitset klikkaamalla. <strong>Piirtämällä</strong> rajauksen voi tehdä itse klikkaamalla lohkon kulmat. Kasvulohkoaineisto on Ruokaviraston (CC BY 4.0), ja uusin julkaistu vuosi valitaan automaattisesti.</p>
+      <p class="small muted">Ruokaviraston rajapinta ei salli hakua selaimesta. Tunnushaku ja kartan klikkaus toimivat välityspalvelimen kautta (ohje: <code>worker/README.md</code>).</p>
+      <h3 style="margin-top:20px">HLS ja Sentinel-2: ei tunnusta</h3>
+      <p class="small">Sovellus hakee NASAn HLS v2.0 -aineiston ja ESA:n Sentinel-2 L2A -aineiston Microsoftin Planetary Computerista. Selain pyytää lyhytaikaisen lukuoikeuden (SAS-token) automaattisesti.</p>
+      <h3>HLS suoraan NASAlta: Earthdata-tunnus (vain skripti)</h3>
+      <ol class="small">
+        <li>Luo maksuton tunnus osoitteessa <a href="https://urs.earthdata.nasa.gov/users/new" rel="noopener">urs.earthdata.nasa.gov</a>.</li>
+        <li>Kirjaudu ja avaa <em>Generate Token</em>. Kopioi token.</li>
+        <li>Anna token skriptille:<pre>export EARTHDATA_TOKEN="token-tähän"
 python scripts/hae_havainnot.py --lohko lohko.geojson --alku 2026-05-01 --loppu 2026-09-30 --hls-lahde nasa</pre></li>
-          <li>Skripti kirjoittaa CSV-tiedoston. Liitä sen sisältö <em>Liitä CSV</em> -kenttään.</li>
-        </ol>
-        <h3>PlanetScope: Planet-API-avain</h3>
-        <ol class="small">
-          <li><strong>Käyttöoikeus.</strong> Tarvitset Planet-tilin, jolla on PlanetScope-latausoikeus. Se voi olla organisaation maksullinen tilaus, tai tutkija voi hakea Planetin <a href="https://www.planet.com/markets/education-and-research/" rel="noopener">Education and Research</a> -ohjelmaan. Planetin 30 päivän kokeilutili ei riitä, koska sillä ei voi tilata PlanetScope-kuvia omalle alueelle.</li>
-          <li><strong>Avaimen hakeminen.</strong> Kirjaudu osoitteessa <a href="https://www.planet.com/account/" rel="noopener">planet.com/account</a> ja avaa <em>My Settings</em>. API-avain näkyy siellä. Tilillä voi olla yksi voimassa oleva avain kerrallaan.</li>
-          <li><strong>Avaimen syöttäminen.</strong> Liitä avain kenttään <em>Planet-API-avain</em>. Avain on oletuksena vain tämän sivun muistissa ja häviää, kun sivu ladataan uudelleen. Valinnalla <em>Muista tämän välilehden ajan</em> avain tallentuu selaimen istuntomuistiin (sessionStorage), josta se poistuu, kun välilehti suljetaan. Avainta ei tallenneta raporttiin, ja se lähetetään vain osoitteeseen api.planet.com.</li>
-          <li><strong>Hae kuvalista.</strong> Sovellus valitsee kultakin päivältä selkeimmän kuvan ja näyttää arvion tilattavasta alasta (kuvien määrä × lohkon ala). Tarkista määrä ennen tilaamista.</li>
-          <li><strong>Tilaa kuvat.</strong> Tilaus rajataan lohkoon ja harmonisoidaan Sentinel-2:een, ja se kuluttaa tilisi kiintiötä Planetin sopimuksen mukaan. Tilauksen valmistuminen kestää yleensä minuutteja, ja sovellus tarkistaa tilan 30 sekunnin välein. Tilauksen tunnus tallentuu kenttään, joten voit sulkea sivun ja jatkaa myöhemmin painamalla <em>Tarkista ja käsittele</em>.</li>
-          <li><strong>Jos selain estää kutsun.</strong> Jos virheilmoitus mainitsee CORSin, Planet ei salli kutsua selaimesta. Käytä silloin skriptiä:<pre>export PL_API_KEY="avain-tähän"
+        <li>Liitä tuloksena syntyvän CSV:n sisältö <em>Liitä CSV</em> -kenttään (Tekniset tiedot).</li>
+      </ol>
+      <h3>PlanetScope: Planet-API-avain</h3>
+      <ol class="small">
+        <li><strong>Käyttöoikeus.</strong> Tarvitset Planet-tilin, jolla on PlanetScope-latausoikeus: organisaation maksullisen tilauksen tai tutkijana Planetin <a href="https://www.planet.com/markets/education-and-research/" rel="noopener">Education and Research</a> -ohjelman. Kokeilutili ei riitä.</li>
+        <li><strong>Avain.</strong> Kirjaudu osoitteessa <a href="https://www.planet.com/account/" rel="noopener">planet.com/account</a> → <em>My Settings</em>.</li>
+        <li><strong>Syöttäminen.</strong> Avain on vain sivun muistissa. Valinnalla <em>Muista tämän välilehden ajan</em> se tallentuu istuntomuistiin (sessionStorage). Avainta ei tallenneta raporttiin, ja se lähetetään vain osoitteeseen api.planet.com.</li>
+        <li><strong>Hae kuvalista → Tilaa kuvat.</strong> Sovellus valitsee kultakin päivältä selkeimmän kuvan ja näyttää arvion tilattavasta alasta. Tilaus kuluttaa tilisi kiintiötä. Tilan tarkistus 30 sekunnin välein; tunnuksella voi jatkaa myöhemmin.</li>
+        <li><strong>Jos selain estää kutsun</strong> (virhe mainitsee CORSin), käytä skriptiä:<pre>export PL_API_KEY="avain-tähän"
 python scripts/hae_havainnot.py --lohko lohko.geojson --alku 2026-05-01 --loppu 2026-09-30 --planet</pre></li>
-        </ol>
-        <p class="small muted">API-avain on yhtä arka kuin salasana. Älä tallenna sitä jaetulle koneelle tai lähetä sitä muille. Jos avain vuotaa, vaihda se Planetin tilisivulla.</p>
-      </div>
-    </details>
-
-    <h3>Havainnot <span id="exBadge" class="badge-ex" hidden>keksitty esimerkkidata</span></h3>
-    <div class="scroll">
-    <table class="obs" id="obsTable">
-      <thead><tr><th>Päivä</th><th>Lähde</th><th>Kuvatunniste</th><th>NDVI / koher.</th><th>Kelvolliset %</th><th>Muuttunut %</th><th><span class="sr">Poista</span></th></tr></thead>
-      <tbody></tbody>
-    </table>
+      </ol>
+      <p class="small muted">API-avain on yhtä arka kuin salasana. Älä tallenna sitä jaetulle koneelle.</p>
     </div>
-    <div class="actions">
-      <button class="btn sm" id="addRow" type="button">+ Lisää havainto</button>
-      <button class="btn sm" id="example" type="button">Täytä esimerkkidata</button>
-      <button class="btn sm" id="clear" type="button">Tyhjennä</button>
-    </div>
-    <details style="margin-top:16px"><summary><span class="ttl">Liitä CSV</span><span class="muted small">päivä; lähde; tunniste; arvo; kelvolliset %; muuttunut %</span></summary>
-      <div class="body">
-        <p class="small muted">Erottimena puolipiste, sarkain tai pilkku. #-alkuiset rivit ohitetaan, joten skriptin hae_havainnot.py tuottaman tiedoston voi liittää sellaisenaan. Puolipiste- ja sarkainerotellussa tiedostossa desimaalipilkku on sallittu. Lähteet: <span id="srcList"></span>.</p>
-        <textarea id="csv" placeholder="2026-08-04;PlanetScope;20260804_094512_21_24a4;0,84;100;"></textarea>
-        <div class="actions"><button class="btn sm" id="importCsv" type="button">Tuo rivit</button><span id="csvMsg" class="small muted"></span></div>
-      </div>
-    </details>
-  </div>
-
-  <div class="card result" aria-live="polite">
-    <h3 style="margin-top:0">Tulos</h3>
-    <div id="verdict" class="muted">Lisää vähintään kaksi saman lähteen havaintoa.</div>
-    <ul class="checks" id="checks"></ul>
-    <svg id="chart" viewBox="0 0 720 280" role="img" aria-label="Havaintojen aikasarja"></svg>
-    <div class="legend" id="legend"></div>
-    <div id="events"></div>
-    <label for="out" style="margin-top:16px">Lisätietoteksti Vipu-mobiiliin <span id="outLen" class="muted"></span></label>
-    <textarea id="out" readonly></textarea>
-    <div class="actions">
-      <button class="btn primary" id="copy" type="button">Kopioi teksti</button>
-      <button class="btn" id="dlJson" type="button">Lataa raportti (JSON)</button>
-    </div>
-  </div>
-
-  <div class="card result">
-    <h3 style="margin-top:0">Haku omalla koodilla</h3>
-    <p class="muted small">Jos haluat tehdä haun itse, voit käyttää skriptiä <code>scripts/hae_havainnot.py</code>, joka tuottaa CSV:n suoraan tuontimuodossa, tai alla olevia pohjia. Haun aikaväli päivittyy havaintojen mukaan. Lisää lohkon rajaus (GeoJSON) muuttujaan <code>lohko</code> ja kutista sitä reunapuskurin verran ennen pikselien laskemista.</p>
-    <h3>HLS (NASA Earthdata, STAC)</h3>
-    <pre id="hlsCode"></pre>
-    <h3>PlanetScope (Data API)</h3>
-    <pre id="planetCode"></pre>
-    <p class="muted small" style="margin-top:12px">Planetin rajapinnat ja tuotenimet muuttuvat, joten tarkista ne Planetin dokumentaatiosta. Sentinel-1-koherenssi saadaan esimerkiksi ESA SNAPilla tai Sen4CAP-järjestelmästä (VH, 6 tai 12 vrk:n pari) [13].</p>
-  </div>
+  </details>
 </section>
 
 <section class="panel" id="menetelma" role="tabpanel" aria-labelledby="tab-menetelma">
@@ -528,474 +713,6 @@ python scripts/hae_havainnot.py --lohko lohko.geojson --alku 2026-05-01 --loppu 
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="config.js"></script>
 <script src="kartta.js"></script>
-<script>
-(function(){
-  var C=window.NiittoCore, root=document.documentElement;
-  document.getElementById('ver').textContent=C.VERSION;
-  function getStore(k){try{return localStorage.getItem(k)}catch(e){return null}}
-  function setStore(k,v){try{localStorage.setItem(k,v)}catch(e){}}
-  var saved=getStore('theme'); if(saved) root.setAttribute('data-theme',saved);
-  document.getElementById('themeBtn').addEventListener('click',function(){
-    var cur=root.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
-    var nx=cur==='dark'?'light':'dark'; root.setAttribute('data-theme',nx); setStore('theme',nx); render();
-  });
-
-  // Välilehdet + nuolinäppäimet
-  var tabs=Array.prototype.slice.call(document.querySelectorAll('nav.tabs button'));
-  function show(id,focus){
-    tabs.forEach(function(b){var on=b.dataset.tab===id;b.setAttribute('aria-selected',on?'true':'false');b.tabIndex=on?0:-1;if(on&&focus)b.focus()});
-    document.querySelectorAll('section.panel').forEach(function(s){s.classList.toggle('active',s.id===id)});
-    if(history.replaceState) history.replaceState(null,'','#'+id);
-  }
-  tabs.forEach(function(b,i){
-    b.addEventListener('click',function(){show(b.dataset.tab)});
-    b.addEventListener('keydown',function(e){
-      var j=null; if(e.key==='ArrowRight')j=(i+1)%tabs.length; else if(e.key==='ArrowLeft')j=(i-1+tabs.length)%tabs.length; else if(e.key==='Home')j=0; else if(e.key==='End')j=tabs.length-1;
-      if(j!==null){e.preventDefault();show(tabs[j].dataset.tab,true)}
-    });
-  });
-  document.querySelectorAll('[data-goto]').forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();show(a.dataset.goto);window.scrollTo(0,0)})});
-  if(location.hash&&document.getElementById(location.hash.slice(1))) show(location.hash.slice(1));
-
-  // Lomake
-  var measureSel=document.getElementById('measure');
-  (function(){var o=document.createElement('option');o.value='';o.textContent='— valitse toimenpide —';measureSel.appendChild(o)})();
-  Object.keys(C.RULES).forEach(function(k){var o=document.createElement('option');o.textContent=k;measureSel.appendChild(o)});
-  measureSel.value='Luonnonhoitonurmi';
-  // Lohkon lähdetiedot: kasvi ja aineistovuosi Ruokaviraston datasta (tai GeoJSONin ominaisuuksista)
-  var parcelInfo={kasvi:null,vuosi:null,lahde:null}, fieldKey=null;
-  measureSel.addEventListener('change',function(){document.getElementById('cropOk').checked=false;render()});
-  document.getElementById('srcList').textContent=C.SOURCES.join(', ');
-  var PKEYS=['ndviDrop','confMin','minValid','minChanged','maxGap','persistWindow','s1k'];
-  function resetP(){PKEYS.forEach(function(k){document.getElementById('p_'+k).value=C.DEFAULTS[k]});render()}
-  PKEYS.forEach(function(k){var el=document.getElementById('p_'+k);el.value=C.DEFAULTS[k];el.addEventListener('input',render)});
-  document.getElementById('resetP').addEventListener('click',resetP);
-
-  var tbody=document.querySelector('#obsTable tbody');
-  function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}
-  function num(v){return v==null||v===''||isNaN(v)?'':v}
-  function addRow(d){
-    d=d||{};
-    var tr=document.createElement('tr');
-    var opts=C.SOURCES.map(function(s){return '<option'+(s===d.src?' selected':'')+'>'+s+'</option>'}).join('');
-    tr.innerHTML='<td><input type="date" class="d" aria-label="Päivä" value="'+esc(d.date)+'"></td>'+
-      '<td><select class="s" aria-label="Lähde">'+opts+'</select></td>'+
-      '<td><input class="i" aria-label="Kuvatunniste" placeholder="tunniste" value="'+esc(d.id)+'"></td>'+
-      '<td><input class="v num" aria-label="Arvo" type="number" step="0.01" value="'+num(d.value)+'"></td>'+
-      '<td><input class="va num" aria-label="Kelvolliset pikselit %" type="number" step="1" min="0" max="100" value="'+num(d.valid)+'"></td>'+
-      '<td><input class="ch num" aria-label="Muuttunut osuus %" type="number" step="1" min="0" max="100" value="'+num(d.changed)+'"></td>'+
-      '<td><button class="del" type="button" aria-label="Poista rivi">×</button></td>';
-    tr.querySelector('.del').addEventListener('click',function(){tr.remove();exampleOn=false;render()});
-    tr.querySelectorAll('input,select').forEach(function(el){el.addEventListener('input',function(){exampleOn=false;render()})});
-    tbody.appendChild(tr);
-  }
-  function pf(el){var v=el.value;return v===''?null:parseFloat(v)}
-  function readObs(){
-    return Array.prototype.map.call(tbody.querySelectorAll('tr'),function(tr){
-      return {date:tr.querySelector('.d').value,src:tr.querySelector('.s').value,id:tr.querySelector('.i').value.trim(),
-        value:pf(tr.querySelector('.v')),valid:pf(tr.querySelector('.va')),changed:pf(tr.querySelector('.ch'))};
-    }).filter(function(o){return o.date&&o.value!=null&&!isNaN(o.value)});
-  }
-  function readP(){
-    var p={measure:measureSel.value,bufferM:parseFloat(document.getElementById('buffer').value)||0};
-    PKEYS.forEach(function(k){var v=parseFloat(document.getElementById('p_'+k).value);if(!isNaN(v))p[k]=v});
-    return p;
-  }
-  function css(v){return getComputedStyle(root).getPropertyValue(v).trim()}
-  var COL={HLS:'--accent',S2:'--blue',PS:'--warn',S1:'--violet'};
-  var NAME={HLS:'HLS',S2:'Sentinel-2',PS:'PlanetScope',S1:'S1-koherenssi'};
-  var current=null, exampleOn=false;
-  document.getElementById('cropOk').addEventListener('change',function(){render()});
-
-  function seasonYear(){ var v=(document.getElementById('dStart')||{}).value||''; return parseInt(v.slice(0,4),10)||null }
-  // Kasvin ja toimenpiteen yhteensopivuus: Ruokaviraston kasvi → toimenpide (kartta.js measureFor)
-  function cropState(){
-    var m=measureSel.value, k=parcelInfo.kasvi, expected=k?KT.measureFor(k):null;
-    var conflict=!m||(k&&expected!==m);
-    return {conflict:conflict, confirmed:document.getElementById('cropOk').checked, kasvi:k, expected:expected, measure:m};
-  }
-  function render(){
-    var obs=readObs(), p=readP();
-    var lohko=document.getElementById('lohko').value.trim()||'[kasvulohkon tunnus]';
-    var rule=C.RULES[p.measure];
-    document.getElementById('ruleNote').textContent=rule?rule.note+' Lähde: peltovalvontaohje 2026.':'';
-    var cs=cropState(), cw=document.getElementById('cropWarn'), cwt=document.getElementById('cropWarnText');
-    cw.hidden=!cs.conflict;
-    if(cs.conflict){
-      cwt.innerHTML=cs.kasvi
-        ? '<strong>Lohkon kasvi on Ruokaviraston aineistossa „'+esc(cs.kasvi)+'”'+(parcelInfo.vuosi?' ('+parcelInfo.vuosi+')':'')+'.</strong> '+(cs.expected?'Se vastaa toimenpidettä '+esc(cs.expected)+', ei valittua toimenpidettä.':'Kasvilla ei ole niittovelvoitetta, joten NDVI:n lasku on todennäköisesti sadonkorjuuta, puintia tai tuleentumista eikä niittoa.')+' Vipu-tekstiä ei muodosteta, ennen kuin vahvistat toimenpiteen.'
-        : '<strong>Valitse lohkon toimenpide.</strong> Vipu-tekstiä ei muodosteta ilman toimenpidettä.';
-      document.getElementById('cropOk').parentNode.hidden=!cs.measure;
-    }
-    var season=seasonYear(), yearNote=parcelInfo.vuosi&&season&&parcelInfo.vuosi!==season?'Lohkon rajaus ja kasvi ovat Ruokaviraston vuoden '+parcelInfo.vuosi+' aineistosta, arvioitava kausi on '+season+'. Tarkista, että ne ovat samat tänä vuonna.':null;
-    document.getElementById('exBadge').hidden=!exampleOn;
-    updateCode(obs);
-    var v=document.getElementById('verdict'), ck=document.getElementById('checks'), ev=document.getElementById('events');
-    var out=document.getElementById('out'), svg=document.getElementById('chart');
-    if(obs.length<2){v.className='muted';v.textContent='Lisää vähintään kaksi saman lähteen havaintoa.';ck.innerHTML='';ev.innerHTML='';out.value='';svg.innerHTML='';document.getElementById('legend').innerHTML='';current=null;setLen();return}
-    var res=C.analyze(obs,p);
-    current={ohjelma:'Niittoraportti',versio:res.version,laadittu:new Date().toISOString().slice(0,10),lohko:lohko,toimenpide:p.measure,
-      tulos:res.verdict,parametrit:res.params,tapahtumat:res.events.map(slimEv),hylatyt_pudotukset:res.rejected.map(function(r){return {lahde:r.fam,alku:r.start,loppu:r.end,pudotus:r.drop,syy:r.reason}}),
-      pois_jatetyt_havainnot:res.excluded.map(function(x){return {havainto:x.obs,syy:x.reason}}),havainnot:res.used.map(function(o){return {paiva:o.date,lahde:o.src,tunniste:o.id,arvo:o.value,kelvolliset:o.valid,muuttunut:o.changed}}),
-      lahteet:['De Vroey ym. 2022, doi:10.1016/j.rse.2022.113145','Claverie ym. 2018, doi:10.1016/j.rse.2018.09.002','Tamm ym. 2016, doi:10.3390/rs8100802','Kolecka ym. 2018, doi:10.3390/rs10081221','Ruokavirasto, peltovalvontaohje 2026']};
-    var vd=res.verdict;
-    v.className='';
-    v.innerHTML='<div class="verdict v-'+vd.level+'">'+esc(vd.label)+'</div><div class="muted small">'+esc(vd.detail)+(res.best?' · paras tapahtuma '+C.fi(res.best.start)+'–'+C.fi(res.best.end)+', luottamus '+res.best.conf+' ('+res.best.fams.map(function(f){return NAME[f]}).join(' + ')+')':'')+'</div>';
-    var checks=res.best?res.best.checks:[], slow=checks.filter(function(c){return /tuleentum/.test(c.t)&&c.s==='warn'});
-    var bw='';
-    if(cs.conflict&&!cs.confirmed) bw+='<div class="bigwarn"><strong>Tarkista toimenpide.</strong> '+(cs.kasvi?'Lohkon kasvi on „'+esc(cs.kasvi)+'”. ':'')+'Tulos ei ole näyttöä niitosta ennen kuin toimenpide on vahvistettu.</div>';
-    if(slow.length&&res.best) bw+='<div class="bigwarn"><strong>Hidas muutos: tarkista, että kyse on niitosta.</strong> Niittoväli '+C.fi(res.best.start)+'–'+C.fi(res.best.end)+' on pitkä, ja NDVI:n hidas lasku voi olla myös tuleentumista, kuivuutta tai sadonkorjuuta.</div>';
-    if(yearNote) bw+='<div class="bigwarn">'+esc(yearNote)+'</div>';
-    var nWarn=checks.filter(function(c){return c.s==='warn'}).length;
-    ck.innerHTML=(res.best?'<li class="info" style="list-style:none;margin-left:-20px"><strong>Tarkistukset</strong> · '+(nWarn?nWarn+(nWarn===1?' huomautus':' huomautusta'):'ei huomautuksia')+'</li>':'')+
-      checks.filter(function(c){return slow.indexOf(c)<0}).map(function(c){return '<li class="'+c.s+'">'+esc(c.t)+'</li>'}).join('');
-    if(res.excluded.length){
-      ck.innerHTML+='<li class="info"><details><summary>'+res.excluded.length+(res.excluded.length===1?' havainto jätettiin':' havaintoa jätettiin')+' pois (pilvisyys tai liian vähän kelvollisia pikseleitä)</summary><ul class="small muted">'+
-        res.excluded.map(function(x){return '<li>'+C.fi(x.obs.date)+' '+esc(x.obs.src)+': '+esc(x.reason)+'</li>'}).join('')+'</ul></details></li>';
-    }
-    v.insertAdjacentHTML('beforeend',bw);
-    var h='';
-    if(res.events.length){h+='<h3>Tunnistetut tapahtumat</h3>';res.events.forEach(function(e){
-      h+='<div class="ev'+(e.accepted?' acc':'')+'"><strong>'+C.fi(e.start)+'–'+C.fi(e.end)+'</strong> · luottamus '+e.conf+' · '+e.fams.map(function(f){return NAME[f]}).join(' + ')+' · '+(e.accepted?'<span style="color:var(--accent)">ylittää rajan</span>':'<span class="muted">alle rajan</span>')+
-      '<div class="muted small">'+e.dets.map(function(d){return NAME[d.fam]+': '+(d.fam==='S1'?'z = '+d.z:'NDVI '+d.before.value.toFixed(2)+' → '+d.after.value.toFixed(2)+', pysyvyys: '+d.persistence)}).join(' · ')+'</div></div>'})}
-    if(res.rejected.length){h+='<h3>Hylätyt pudotukset</h3>';res.rejected.forEach(function(r){h+='<div class="ev"><strong>'+C.fi(r.start)+'–'+C.fi(r.end)+'</strong> · '+NAME[r.fam]+' · pudotus '+r.drop+'<div class="muted small">'+esc(r.reason)+'</div></div>'})}
-    ev.innerHTML=h;
-    var txt=(cs.conflict&&!cs.confirmed)?'':C.reportText(res,lohko,p.measure);
-    if(txt){
-      var src=[];
-      if(parcelInfo.vuosi) src.push('Rajaus: Ruokaviraston kasvulohkoaineisto '+parcelInfo.vuosi+(parcelInfo.kasvi?' (kasvi '+parcelInfo.kasvi+')':'')+'.');
-      if(cs.conflict&&cs.confirmed) src.push('Toimenpide '+p.measure+' viljelijän ilmoituksen mukaan.');
-      txt=txt+(src.length?' '+src.join(' '):'');
-    }
-    out.value=txt;
-    current.lohkoaineisto={vuosi:parcelInfo.vuosi,kasvi:parcelInfo.kasvi,lahde:parcelInfo.lahde,kausi:season,toimenpide_vahvistettu:cs.conflict?cs.confirmed:null};
-    setLen();
-    drawChart(svg,res);
-  }
-  function slimEv(e){return {alku:e.start,loppu:e.end,luottamus:e.conf,hyvaksytty:e.accepted,lahteet:e.fams,tarkistukset:e.checks,
-    tunnistukset:e.dets.map(function(d){return {lahde:d.fam,alku:d.start,loppu:d.end,ennen:{paiva:d.before.date,tunniste:d.before.id,arvo:d.before.value},jalkeen:{paiva:d.after.date,tunniste:d.after.id,arvo:d.after.value},pudotus:d.drop,z:d.z,pysyvyys:d.persistence,muuttunut:d.changed,luottamus:Math.round(d.conf*100)/100}})}}
-  function setLen(){var o=document.getElementById('out');document.getElementById('outLen').textContent=o.value?'('+o.value.length+' merkkiä)':'';document.getElementById('copy').disabled=!o.value;document.getElementById('dlJson').disabled=!current}
-
-  function drawChart(svg,res){
-    var W=720,H=280,L=48,R=48,T=28,B=40, used=res.used;
-    if(!used.length){svg.innerHTML='';return}
-    var t=function(d){return Date.parse(d)/864e5};
-    var x0=t(used[0].date),x1=t(used[used.length-1].date); if(x1===x0)x1=x0+1;
-    var X=function(d){return L+(t(d)-x0)/(x1-x0)*(W-L-R)}, Y=function(v){return T+(1-Math.max(0,Math.min(1,v)))*(H-T-B)};
-    var mut=css('--muted'),line=css('--line'),acc=css('--accent');
-    var s='';
-    [0,0.25,0.5,0.75,1].forEach(function(v){s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(v)+'" y2="'+Y(v)+'" stroke="'+line+'"/><text x="'+(L-8)+'" y="'+(Y(v)+4)+'" text-anchor="end" font-size="13" fill="'+mut+'">'+v.toFixed(2)+'</text>'});
-    s+='<text x="'+(L-8)+'" y="'+(T-12)+'" text-anchor="end" font-size="12" fill="'+mut+'">NDVI</text>';
-    if(used.some(function(o){return o.fam==='S1'}))s+='<text x="'+(W-R+8)+'" y="'+(T-12)+'" font-size="12" fill="'+css('--violet')+'">koher.</text>';
-    res.events.forEach(function(e){var xa=X(e.start),xb=X(e.end);s+='<rect x="'+xa+'" y="'+T+'" width="'+Math.max(3,xb-xa)+'" height="'+(H-T-B)+'" fill="'+acc+'" fill-opacity="'+(e.accepted?0.16:0.06)+'"><title>'+C.fi(e.start)+'–'+C.fi(e.end)+' luottamus '+e.conf+'</title></rect>'});
-    var fams={}; used.forEach(function(o){(fams[o.fam]=fams[o.fam]||[]).push(o)});
-    Object.keys(fams).forEach(function(f){
-      var c=css(COL[f]), pts=fams[f].map(function(o){return X(o.date)+','+Y(o.value)}).join(' ');
-      s+='<polyline points="'+pts+'" fill="none" stroke="'+c+'" stroke-width="1.5"'+(f==='S1'?' stroke-dasharray="4 3"':'')+'/>';
-      fams[f].forEach(function(o){s+='<circle cx="'+X(o.date)+'" cy="'+Y(o.value)+'" r="4.5" fill="'+c+'"><title>'+C.fi(o.date)+' '+esc(o.src)+' '+o.value+(o.id?' · '+esc(o.id):'')+'</title></circle>'});
-    });
-    s+='<text x="'+L+'" y="'+(H-14)+'" font-size="13" fill="'+mut+'">'+C.fi(used[0].date)+'</text><text x="'+(W-R)+'" y="'+(H-14)+'" text-anchor="end" font-size="13" fill="'+mut+'">'+C.fi(used[used.length-1].date)+'</text>';
-    svg.innerHTML=s;
-    document.getElementById('legend').innerHTML=Object.keys(fams).map(function(f){return '<span><i style="background:var('+COL[f]+')"></i>'+NAME[f]+'</span>'}).join('')+'<span><i style="background:var(--accent);opacity:.35;border-radius:2px"></i>tunnistettu niittoväli</span>';
-  }
-
-  function updateCode(obs){
-    var a=obs.length?obs.map(function(o){return o.date}).sort()[0]:'2026-07-15', b=obs.length?obs.map(function(o){return o.date}).sort().pop():'2026-09-15';
-    document.getElementById('hlsCode').textContent=
-'# pip install pystac-client rioxarray  (Earthdata-tunnus: urs.earthdata.nasa.gov)\nfrom pystac_client import Client\ncat = Client.open("https://cmr.earthdata.nasa.gov/stac/LPCLOUD")\nitems = cat.search(\n    collections=["HLSS30_2.0", "HLSL30_2.0"],\n    intersects=lohko,              # lohkon GeoJSON, kutistettu puskurilla\n    datetime="'+a+'/'+b+'",\n).item_collection()\n# NDVI: S30 (B8A-B04)/(B8A+B04), L30 (B05-B04)/(B05+B04)\n# Fmask: hylkää pilvi, varjo, lumi ja korkea aerosoli → kelvolliset %\n# Muuttunut % = osuus pikseleistä, joissa NDVI laski ≥ 0,12 edellisestä\nfor it in items:\n    print(it.id, it.datetime.date())   # it.id = kuvatunniste raporttiin';
-    document.getElementById('planetCode').textContent=
-'POST https://api.planet.com/data/v1/quick-search\n{\n  "item_types": ["PSScene"],\n  "filter": {"type": "AndFilter", "config": [\n    {"type": "GeometryFilter", "field_name": "geometry", "config": <lohko>},\n    {"type": "DateRangeFilter", "field_name": "acquired",\n     "config": {"gte": "'+a+'T00:00:00Z", "lte": "'+b+'T23:59:59Z"}},\n    {"type": "RangeFilter", "field_name": "cloud_cover", "config": {"lte": 0.5}}\n  ]}\n}\n# Tilaus: Orders API, ortho_analytic_8b_sr + ortho_udm2, työkalut clip + harmonize\n# Kelvolliset % = UDM2 clear -kaistan osuus lohkolla\n# Kuvatunniste raporttiin = item id';
-  }
-
-  document.getElementById('addRow').addEventListener('click',function(){addRow()});
-  document.getElementById('clear').addEventListener('click',function(){tbody.innerHTML='';exampleOn=false;render()});
-  document.getElementById('example').addEventListener('click',function(){
-    tbody.innerHTML='';
-    // KEKSITTY esimerkkidata. Tunnisteiden muoto vastaa oikeita, sisältö ei.
-    [{date:'2026-07-14',src:'HLS-S30',id:'HLS.S30.T34VEP.2026195T094031.v2.0',value:0.78,valid:96},
-     {date:'2026-07-23',src:'HLS-L30',id:'HLS.L30.T34VEP.2026204T093522.v2.0',value:0.80,valid:88},
-     {date:'2026-07-29',src:'PlanetScope',id:'20260729_093411_07_24b6',value:0.83,valid:100},
-     {date:'2026-08-04',src:'PlanetScope',id:'20260804_094512_21_24a4',value:0.84,valid:97},
-     {date:'2026-08-06',src:'HLS-S30',id:'HLS.S30.T34VEP.2026218T094029.v2.0',value:0.55,valid:35},
-     {date:'2026-08-11',src:'PlanetScope',id:'20260811_093958_44_24c1',value:0.51,valid:98,changed:96},
-     {date:'2026-08-13',src:'HLS-S30',id:'HLS.S30.T34VEP.2026225T094031.v2.0',value:0.50,valid:91,changed:94},
-     {date:'2026-08-16',src:'PlanetScope',id:'20260816_094102_12_24a4',value:0.55,valid:99},
-     {date:'2026-07-20',src:'Sentinel-1 koherenssi',id:'S1A VH 0714–0726',value:0.21},
-     {date:'2026-07-26',src:'Sentinel-1 koherenssi',id:'S1C VH 0720–0726',value:0.19},
-     {date:'2026-08-01',src:'Sentinel-1 koherenssi',id:'S1A VH 0726–0801',value:0.20},
-     {date:'2026-08-07',src:'Sentinel-1 koherenssi',id:'S1C VH 0801–0807',value:0.22},
-     {date:'2026-08-13',src:'Sentinel-1 koherenssi',id:'S1A VH 0807–0813',value:0.52}
-    ].forEach(addRow);
-    if(!document.getElementById('lohko').value) document.getElementById('lohko').value='ESIMERKKI-1';
-    exampleOn=true; render();
-  });
-  document.getElementById('importCsv').addEventListener('click',function(){
-    var lines=document.getElementById('csv').value.split(/\r?\n/), ok=0, bad=0;
-    lines.forEach(function(l){
-      if(!l.trim()||l.trim().charAt(0)==='#') return;
-      var sep=l.indexOf(';')>=0?';':(l.indexOf('\t')>=0?'\t':',');
-      var p=l.split(sep).map(function(s){return s.trim()});
-      var f=function(x){if(x==null||x==='')return null;var n=parseFloat(sep===','?x:x.replace(',','.'));return isNaN(n)?null:n};
-      if(p.length>=4&&/^\d{4}-\d{2}-\d{2}$/.test(p[0])&&C.SOURCES.indexOf(p[1])>=0&&f(p[3])!=null){addRow({date:p[0],src:p[1],id:p[2],value:f(p[3]),valid:f(p[4]),changed:f(p[5])});ok++}
-      else bad++;
-    });
-    document.getElementById('csvMsg').textContent=ok+' riviä tuotu'+(bad?', '+bad+' ohitettu (tarkista päivä, lähde ja arvo)':'');
-    exampleOn=false; render();
-  });
-  ['lohko','buffer'].forEach(function(id){document.getElementById(id).addEventListener('input',render)});
-  measureSel.addEventListener('change',render);
-  document.getElementById('copy').addEventListener('click',function(){
-    var o=document.getElementById('out'); if(!o.value) return;
-    var btn=this, done=function(){btn.textContent='Kopioitu';setTimeout(function(){btn.textContent='Kopioi teksti'},1500)};
-    var fb=function(){o.select();try{document.execCommand('copy')}catch(e){}done()};
-    if(navigator.clipboard) navigator.clipboard.writeText(o.value).then(done,fb); else fb();
-  });
-  document.getElementById('dlJson').addEventListener('click',function(){
-    if(!current) return;
-    var blob=new Blob([JSON.stringify(current,null,2)],{type:'application/json'});
-    var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-    a.download='niittoraportti_'+String(current.lohko).replace(/[^\w-]/g,'_')+'.json'; document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(function(){URL.revokeObjectURL(a.href)},1000);
-  });
-  // ---------- Datahaku (datahaku.js) ----------
-  var HK=window.NiittoHaku;
-  function getSess(k){try{return sessionStorage.getItem(k)}catch(e){return null}}
-  function setSess(k,v){try{if(v==null)sessionStorage.removeItem(k);else sessionStorage.setItem(k,v)}catch(e){}}
-  var fieldState=null, psSel=null, busy=false, ctrl=null, pollTimer=null;
-  var geoEl=document.getElementById('geo'), geoMsg=document.getElementById('geoMsg');
-  var logEl=document.getElementById('fetchLog'), progEl=document.getElementById('fetchProg'), stopBtn=document.getElementById('fetchStop');
-  var keyEl=document.getElementById('plKey'), remEl=document.getElementById('plRemember'), ordEl=document.getElementById('psOrderId');
-  var psOrderBtn=document.getElementById('psOrder');
-
-  (function initDates(){
-    var d=new Date(), y=d.getMonth()<5?d.getFullYear()-1:d.getFullYear();
-    var end=y+'-09-30', today=d.toISOString().slice(0,10);
-    document.getElementById('dStart').value=y+'-05-01';
-    document.getElementById('dEnd').value=today<end?today:end;
-  })();
-  var savedKey=getSess('niitto_plkey'); if(savedKey){keyEl.value=savedKey;remEl.checked=true}
-  var savedOrd=getSess('niitto_order'); if(savedOrd){try{ordEl.value=JSON.parse(savedOrd).id||''}catch(e){}}
-  remEl.addEventListener('change',function(){setSess('niitto_plkey',remEl.checked&&keyEl.value?keyEl.value:null)});
-  keyEl.addEventListener('input',function(){if(remEl.checked)setSess('niitto_plkey',keyEl.value||null)});
-  document.getElementById('toCreds').addEventListener('click',function(e){e.preventDefault();var d=document.getElementById('tunnukset');d.open=true;d.scrollIntoView({behavior:'smooth',block:'start'})});
-
-  function fx(v,d){return v.toFixed(d).replace('.',',')}
-  function say(t,cls){var li=document.createElement('li');li.className=cls||'info';li.textContent=t;logEl.appendChild(li);return li}
-  function parseGeo(){
-    fieldState=null; psSel=null; psOrderBtn.disabled=true; psOrderBtn.textContent='2. Tilaa kuvat';
-    var t=geoEl.value.trim(); if(!t){geoMsg.textContent='';return}
-    try{
-      fieldState=HK.parseField(t);
-      geoMsg.textContent='Lohko '+fx(fieldState.areaM2/1e4,2)+' ha · '+(fieldState.sourceEpsg===4326?'WGS84':'EPSG:'+fieldState.sourceEpsg);
-      geoMsg.style.color='';
-      var pr=fieldState.properties||{}, tun=pr.tunnus||pr.kasvulohko||pr.KASVULOHKOTUNNUS||pr.id||pr.ID;
-      var key=fieldState.bbox.map(function(v){return v.toFixed(5)}).join(',');
-      if(fieldKey&&key!==fieldKey) clearForNewField();
-      fieldKey=key;
-      parcelInfo={kasvi:pr.kasvi||pr.KASVIKOODI_SELITE_FI||null,vuosi:pr.vuosi?+pr.vuosi:null,lahde:pr.lahde||null};
-      var lo=document.getElementById('lohko'); if(tun) lo.value=tun;
-      if(parcelInfo.kasvi){var m=KT.measureFor(parcelInfo.kasvi); measureSel.value=m&&C.RULES[m]?m:''; document.getElementById('cropOk').checked=false}
-      render();
-      if(mapCtl) mapCtl.show({type:'Feature',properties:{},geometry:fieldState.geometry});
-    }catch(e){geoMsg.textContent='Rajausta ei voitu lukea: '+e.message;geoMsg.style.color='var(--bad)'}
-  }
-  // Uusi lohko: edellisen lohkon havainnot ja tulos eivät saa jäädä näkyviin.
-  function clearForNewField(){
-    var had=readObs().length;
-    tbody.innerHTML=''; exampleOn=false; addRow(); addRow();
-    document.getElementById('cropOk').checked=false;
-    if(had) say('Lohko vaihtui: edellisen lohkon havainnot ja tulos poistettiin. Hae havainnot uudelle lohkolle.','warn');
-  }
-  geoEl.addEventListener('input',parseGeo);
-  document.getElementById('geoFile').addEventListener('change',function(){
-    var f=this.files&&this.files[0]; if(!f) return;
-    var r=new FileReader(); r.onload=function(){geoEl.value=String(r.result);parseGeo()}; r.readAsText(f);
-  });
-
-  // ---------- Lohkon valinta: peruslohkotunnus ja kartta (kartta.js) ----------
-  var KT=window.NiittoKartta, mapCtl=null;
-  var pickMsg=document.getElementById('pickMsg'), pltList=document.getElementById('pltList');
-  function pickSay(t,cls){pickMsg.textContent=t;pickMsg.style.color=cls==='fail'?'var(--bad)':cls==='warn'?'var(--warn)':''}
-  function applyParcel(p){
-    geoEl.value=JSON.stringify(p.feature); parseGeo();
-    if(p.tunnus) document.getElementById('lohko').value=p.tunnus;
-    if(p.kind==='peruslohko'||p.kind==='piirretty'){ parcelInfo={kasvi:null,vuosi:p.year||null,lahde:p.kind}; }
-    render();
-    if(mapCtl) mapCtl.show(p.feature);
-    var season=seasonYear(), msg='Valittu '+(p.kind==='peruslohko'?'peruslohko ':'kasvulohko ')+(p.tunnus||'')+(p.kasvi?' · '+p.kasvi:'')+(fieldState?' · '+fx(fieldState.areaM2/1e4,2)+' ha':'')+(p.year?' · Ruokavirasto '+p.year:'')+'.';
-    if(p.kind==='peruslohko') msg+=' Kasvulohkoja ei löytynyt, joten rajaus on koko peruslohko. Tarkista, että se vastaa niitettävää alaa.';
-    if(p.year&&season&&p.year!==season) msg+=' Huom: rajaus ja kasvi ovat vuoden '+p.year+' aineistosta, arvioitava kausi on '+season+'. Tarkista, että ne ovat samat tänä vuonna.';
-    pickSay(msg, p.year&&season&&p.year!==season?'warn':'ok');
-  }
-  document.getElementById('pltGo').addEventListener('click',async function(){
-    var btn=this; btn.disabled=true; pltList.hidden=true; pltList.innerHTML=''; pickSay('Haetaan lohkoa…');
-    try{
-      var y=parseInt((document.getElementById('dStart').value||'').slice(0,4),10)||new Date().getFullYear();
-      var r=await KT.findByTunnus(document.getElementById('pltIn').value,{year:y});
-      if(r.parcels.length===1){applyParcel(r.parcels[0]); if(r.kind==='kasvulohko'&&!r.tunnus.lohko) pickMsg.textContent+=' Peruslohkolla on vuoden '+r.year+' aineistossa vain yksi kasvulohko.'; if(r.via==='jsonp') pickMsg.textContent+=' (haettu JSONP:llä)'; if(r.via==='proxy') pickMsg.textContent+=' (haettu välityspalvelimen kautta)'}
-      else{
-        pickSay('Peruslohkolla on '+r.parcels.length+' kasvulohkoa vuonna '+r.year+'. Valitse niitettävä lohko:');
-        r.parcels.sort(function(a,b){return (b.measure?1:0)-(a.measure?1:0)}).forEach(function(p){
-          var b=document.createElement('button'); b.type='button'; b.className='btn sm';
-          b.textContent=(p.tunnus||'?')+(p.kasvi?' · '+p.kasvi:'')+' · '+fx(p.ha,2)+' ha'+(p.measure?' · niittovelvoite':'');
-          if(p.measure) b.className='btn sm primary';
-          b.addEventListener('click',function(){pltList.hidden=true;applyParcel(p)}); pltList.appendChild(b);
-        });
-        pltList.hidden=false;
-        if(mapCtl) mapCtl.show({type:'FeatureCollection',features:r.parcels.map(function(p){return p.feature})});
-      }
-    }catch(e){pickSay(e.message,'fail')}
-    btn.disabled=false;
-  });
-  document.getElementById('pltIn').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();document.getElementById('pltGo').click()}});
-
-  var baseSel=document.getElementById('mapBase'), mmlKeyEl=document.getElementById('mmlKey'), mmlRem=document.getElementById('mmlRemember');
-  Object.keys(KT.MML_LAYERS).forEach(function(k){var o=document.createElement('option');o.value=k;o.textContent=KT.MML_LAYERS[k].title;baseSel.appendChild(o)});
-  var savedMml=getStore('niitto_mmlkey'); if(savedMml){mmlKeyEl.value=savedMml;mmlRem.checked=true}
-  function storeMml(){ if(mmlRem.checked&&mmlKeyEl.value) setStore('niitto_mmlkey',mmlKeyEl.value); else { try{localStorage.removeItem('niitto_mmlkey')}catch(e){} } }
-  mmlRem.addEventListener('change',storeMml);
-  mmlKeyEl.addEventListener('change',function(){storeMml(); if(mapCtl) mapCtl.setKey(mmlKeyEl.value.trim())});
-  baseSel.addEventListener('change',function(){ if(mapCtl) mapCtl.setLayer(baseSel.value) });
-  document.getElementById('mapOpen').addEventListener('click',function(){
-    var w=document.getElementById('mapWrap'), open=w.hidden; w.hidden=!open; this.setAttribute('aria-expanded',open?'true':'false');
-    this.textContent=open?'Piilota kartta':'Valitse kartalta';
-    if(open&&!mapCtl){
-      try{
-        mapCtl=KT.createMap(document.getElementById('map'),{key:mmlKeyEl.value.trim(),layer:baseSel.value,
-          year:parseInt((document.getElementById('dStart').value||'').slice(0,4),10)||new Date().getFullYear(),
-          onMessage:function(t,c){pickSay(t,c)}, highlight:document.getElementById('niittoOn').checked, onSelect:function(p){p.kind='kasvulohko';applyParcel(p)}});
-        if(fieldState) mapCtl.show({type:'Feature',properties:{},geometry:fieldState.geometry});
-      }catch(e){pickSay('Karttaa ei voitu avata: '+e.message,'fail')}
-    } else if(open&&mapCtl){ setTimeout(function(){mapCtl.invalidate()},0) }
-  });
-  // Niittovelvoitteisten lohkojen selite ja kytkin
-  document.getElementById('niittoLegend').innerHTML=KT.NIITTO_CLASSES.map(function(c){return '<span><i style="background:'+c.fill+';opacity:.7"></i>'+esc(c.name)+'</span>'}).join('');
-  document.getElementById('niittoOn').addEventListener('change',function(){ if(mapCtl) mapCtl.setHighlight(this.checked) });
-  // Paikkahaku: MML:n geokoodaus avaimella, muuten OpenStreetMap; myös koordinaatit
-  var placeList=document.getElementById('placeList');
-  async function placeSearch(){
-    var q=document.getElementById('placeQ').value.trim(); if(!q) return;
-    if(!mapCtl) document.getElementById('mapOpen').click();
-    placeList.hidden=true; placeList.innerHTML=''; pickSay('Haetaan paikkaa…');
-    try{
-      var res=await KT.geocode(q, mmlKeyEl.value.trim());
-      if(!res.length){pickSay('Paikkaa „'+q+'” ei löytynyt.','warn');return}
-      if(res.length===1){mapCtl.goTo(res[0].lat,res[0].lon,15);pickSay(res[0].label+'. Klikkaa kasvulohkoa.');return}
-      pickSay('Valitse paikka:');
-      res.forEach(function(r){var b=document.createElement('button');b.type='button';b.className='btn sm';b.textContent=r.label.length>70?r.label.slice(0,68)+'…':r.label;
-        b.addEventListener('click',function(){placeList.hidden=true;mapCtl.goTo(r.lat,r.lon,15);pickSay(r.label+'. Klikkaa kasvulohkoa.')});placeList.appendChild(b)});
-      placeList.hidden=false;
-    }catch(e){pickSay('Paikkahaku epäonnistui: '+e.message,'fail')}
-  }
-  document.getElementById('placeGo').addEventListener('click',placeSearch);
-  document.getElementById('placeQ').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();placeSearch()}});
-  var drawBtn=document.getElementById('drawBtn'), drawDone=document.getElementById('drawDone'), drawCancel=document.getElementById('drawCancel'), mapHint=document.getElementById('mapHint');
-  function drawUi(on){drawBtn.hidden=on;drawDone.hidden=!on;drawCancel.hidden=!on;mapHint.textContent=on?'Klikkaa lohkon kulmat järjestyksessä ja paina Valmis.':'Lähennä ja klikkaa kasvulohkoa. Rullalla zoomaus toimii, kun olet klikannut karttaa.'}
-  drawBtn.addEventListener('click',function(){if(!mapCtl)return;mapCtl.startDraw();drawUi(true)});
-  drawCancel.addEventListener('click',function(){mapCtl.stopDraw();drawUi(false)});
-  drawDone.addEventListener('click',function(){var f=mapCtl.finishDraw(); if(f){drawUi(false); applyParcel({feature:f,kind:'piirretty',tunnus:null}); parcelInfo={kasvi:null,vuosi:null,lahde:'piirretty'}; render(); pickSay('Rajaus piirretty käsin'+(fieldState?' · '+fx(fieldState.areaM2/1e4,2)+' ha':'')+'. Lisää kasvulohkon tunnus yllä olevaan kenttään.','ok')}});
-
-  function fetchOpts(){
-    var p=readP();
-    return {bufferM:p.bufferM,ndviDrop:p.ndviDrop!=null?p.ndviDrop:C.DEFAULTS.ndviDrop,minValid:p.minValid!=null?p.minValid:C.DEFAULTS.minValid,
-      maxCloud:parseFloat(document.getElementById('maxCloud').value)||80,signal:ctrl&&ctrl.signal,
-      onProgress:function(m,a,b){if(b){progEl.hidden=false;progEl.max=b;progEl.value=a||0}}};
-  }
-  function range(){
-    var a=document.getElementById('dStart').value, b=document.getElementById('dEnd').value;
-    if(!a||!b||a>b) throw new Error('Tarkista aikaväli.');
-    return [a,b];
-  }
-  function needField(){ if(!fieldState) throw new Error('Liitä ensin lohkon rajaus (GeoJSON).'); return fieldState }
-  function needKey(){ var k=keyEl.value.trim(); if(!k) throw new Error('Syötä Planet-API-avain. Ohjeet: Tunnukset ja ohjeet.'); return k }
-  function setBusy(on){
-    busy=on; ['hlsGo','psSearch','psResume'].forEach(function(id){document.getElementById(id).disabled=on});
-    psOrderBtn.disabled=on||!psSel||!psSel.chosen.length; psOrderBtn.classList.toggle('primary',!psOrderBtn.disabled); stopBtn.hidden=!on&&!pollTimer; if(!on) progEl.hidden=true;
-  }
-  async function run(fn){
-    if(busy) return; ctrl=window.AbortController?new AbortController():null; setBusy(true);
-    try{ await fn() }catch(e){ say(e.message,'fail') } finally{ setBusy(false) }
-  }
-  stopBtn.addEventListener('click',function(){ if(ctrl) ctrl.abort(); if(pollTimer){clearTimeout(pollTimer);pollTimer=null;say('Tilauksen seuranta keskeytettiin. Jatka myöhemmin painikkeella Tarkista ja käsittele.','warn')} stopBtn.hidden=!busy });
-
-  function mergeObs(obs,srcs,label){
-    if(exampleOn){tbody.innerHTML='';exampleOn=false}
-    var removed=0;
-    Array.prototype.slice.call(tbody.querySelectorAll('tr')).forEach(function(tr){
-      var s=tr.querySelector('.s').value, empty=!tr.querySelector('.d').value&&tr.querySelector('.v').value==='';
-      if(empty||srcs.indexOf(s)>=0){ if(!empty) removed++; tr.remove() }
-    });
-    obs.forEach(addRow); render();
-    say(label+': '+obs.length+' havaintoa lisätty taulukkoon'+(removed?' (aiemmat '+removed+' saman lähteen riviä korvattiin)':'')+'.','ok');
-  }
-  function sayHidden(list,label){
-    if(!list.length) return;
-    say(label+': '+list.length+' kuvaa ohitettiin. Ensimmäinen syy: '+list[0],'warn');
-  }
-
-  document.getElementById('hlsGo').addEventListener('click',function(){run(async function(){
-    var f=needField(), r=range(); logEl.innerHTML='';
-    var li=say('Haetaan HLS-kuvat '+C.fi(r[0])+'–'+C.fi(r[1])+'…');
-    var o=fetchOpts(); var prog=o.onProgress; o.onProgress=function(m,a,b){li.textContent=m;prog(m,a,b)};
-    var res=await HK.fetchHls(f,r[0],r[1],o);
-    li.textContent='HLS: '+res.searched+' kuvaa löytyi, '+res.obs.length+' päivältä saatiin lohkolta kelvollinen arvo.';
-    sayHidden(res.skipped,'HLS');
-    mergeObs(res.obs,['HLS-S30','HLS-L30'],'HLS');
-  })});
-
-  document.getElementById('psSearch').addEventListener('click',function(){run(async function(){
-    var f=needField(), r=range(), k=needKey(); logEl.innerHTML=''; psSel=null;
-    var li=say('Haetaan PlanetScope-kuvalista…');
-    psSel=await HK.psSearch(k,f,r[0],r[1],fetchOpts());
-    var n=psSel.chosen.length;
-    li.textContent='PlanetScope: '+psSel.all+' kuvaa löytyi, '+n+' päivää. Tilattavaksi valitaan kunkin päivän selkein kuva.';
-    if(n){
-      say('Arvioitu tilattava ala: '+n+' × '+fx(f.areaM2/1e4,2)+' ha ≈ '+fx(psSel.estimateKm2,2)+' km². Tarkista kiintiö ennen tilaamista.','warn');
-      psOrderBtn.textContent='2. Tilaa '+n+' kuvaa (≈ '+fx(psSel.estimateKm2,2)+' km²)';
-    }
-  })});
-
-  psOrderBtn.addEventListener('click',function(){run(async function(){
-    var f=needField(), k=needKey();
-    if(!psSel||!psSel.chosen.length) throw new Error('Hae ensin kuvalista.');
-    var ids=psSel.chosen.map(function(c){return c.id});
-    if(!window.confirm('Tilataanko '+ids.length+' PlanetScope-kuvaa lohkoon rajattuna (≈ '+fx(psSel.estimateKm2,2)+' km²)? Tilaus kuluttaa Planet-tilisi kiintiötä.')) return;
-    var lo=document.getElementById('lohko').value.trim();
-    var id=await HK.psOrder(k,f,ids,'Niittoraportti '+(lo||'')+' '+new Date().toISOString().slice(0,10));
-    ordEl.value=id; setSess('niitto_order',JSON.stringify({id:id,ids:ids}));
-    say('Tilaus lähetetty, tunnus '+id+'. Tila tarkistetaan 30 sekunnin välein.','ok');
-    psSel=null; psOrderBtn.textContent='2. Tilaa kuvat';
-    setTimeout(function(){poll(id,ids)},0);
-  })});
-
-  function poll(id,ids){
-    if(pollTimer){clearTimeout(pollTimer);pollTimer=null}
-    run(async function(){
-      var k=needKey(), f=needField();
-      var st=await HK.psOrderStatus(k,id);
-      if(st.state==='success'||st.state==='partial'){
-        say('Tilaus '+id+' valmis ('+st.state+'). Lasketaan havainnot…');
-        var res=await HK.psProcess(st.results,f,ids||[],fetchOpts());
-        sayHidden(res.skipped,'PlanetScope');
-        mergeObs(res.obs,['PlanetScope'],'PlanetScope');
-        if(st.state==='partial') say('Osa tilauksen kuvista epäonnistui Planetin päässä.','warn');
-      }else if(st.state==='failed'||st.state==='cancelled'){
-        throw new Error('Tilaus '+id+' päättyi tilaan '+st.state+'. '+(st.message||''));
-      }else{
-        var li=logEl.querySelector('li[data-poll]')||say(''); li.setAttribute('data-poll','1');
-        li.textContent='Tilaus '+id+': '+st.state+' ('+new Date().toLocaleTimeString('fi-FI')+'). Seuraava tarkistus 30 s kuluttua.';
-        pollTimer=setTimeout(function(){pollTimer=null;poll(id,ids)},30000);
-      }
-    });
-  }
-  document.getElementById('psResume').addEventListener('click',function(){
-    var id=ordEl.value.trim(); if(!id){say('Syötä tilauksen tunnus.','fail');return}
-    var ids=null; try{var s=JSON.parse(getSess('niitto_order')||'null'); if(s&&s.id===id) ids=s.ids}catch(e){}
-    poll(id,ids);
-  });
-
-  addRow(); addRow(); render();
-})();
-</script>
+<script src="sovellus.js"></script>
 </body>
 </html>

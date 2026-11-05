@@ -377,6 +377,85 @@
     return { obs: finalize(raw, o), searched: items.length, skipped: skipped };
   }
 
+  // ---------- Sentinel-2 L2A (Planetary Computer) ----------
+  // Pelkkä Sentinel-2 ilman HLS:n harmonisointia: 10 m punainen (B04) ja NIR (B08), pilvet
+  // Scene Classification -kerroksesta (SCL, 20 m). Kelvollisia luokkia ovat 4 kasvillisuus,
+  // 5 paljas maa ja 6 vesi; pilvet, varjot, sirrus, lumi ja virheelliset pikselit hylätään.
+  var S2_COLL = 'sentinel-2-l2a';
+  function sclValid(v) { return v === 4 || v === 5 || v === 6; }
+  // Prosessointiversiosta 04.00 alkaen (25.1.2022) L2A-arvoissa on +1000 siirtymä (BOA_ADD_OFFSET).
+  function s2Offset(item) {
+    var b = parseFloat((item.properties || {})['s2:processing_baseline']);
+    if (!isNaN(b)) return b >= 4 ? 1000 : 0;
+    return dateOf((item.properties || {}).datetime) >= '2022-01-25' ? 1000 : 0;
+  }
+
+  async function s2Search(field, start, end, opts) {
+    var o = defaults(opts), items = [];
+    var body = {
+      collections: [S2_COLL], intersects: field.geometry,
+      datetime: start + 'T00:00:00Z/' + end + 'T23:59:59Z', limit: 250,
+      query: { 'eo:cloud_cover': { lte: o.maxCloud } }
+    };
+    var url = PC_STAC + '/search', req = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+    for (var page = 0; page < 20 && url; page++) {
+      var js = await getJson(url, req, 'Planetary Computer (Sentinel-2-haku)');
+      items = items.concat(js.features || []);
+      var nx = (js.links || []).filter(function (l) { return l.rel === 'next'; })[0];
+      if (!nx) break;
+      url = nx.href;
+      req = nx.method === 'POST' ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({}, body, nx.body || {})) } : {};
+    }
+    return items;
+  }
+
+  async function s2Item(item, field, o) {
+    var a = item.assets || {};
+    if (!a.B04 || !a.B08 || !a.SCL) throw new Error('Sentinel-2-kuvasta ' + item.id + ' puuttuu kaista (B04, B08 tai SCL).');
+    var urls = await Promise.all([a.B04.href, a.B08.href, a.SCL.href].map(signHref));
+    var tiffs = await Promise.all(urls.map(function (u) { return openTiff(u, 'Planetary Computer (Sentinel-2-kuva)'); }));
+    var imgs = await Promise.all(tiffs.map(function (t) { return t.getImage(); }));
+    var epsg = epsgOf(imgs[0], epsgHint(item));
+    var fw = fieldWindow(imgs[0], epsg, field, o.bufferM);
+    if (!fw || !fw.n) return null;
+    var rs = await Promise.all(imgs.slice(0, 2).map(function (im) { return im.readRasters({ window: fw.window, samples: [0] }); }));
+    // SCL on karkeammassa ruudukossa: luetaan sama alue ja haetaan kullekin 10 m pikselille sen 20 m solu.
+    var sImg = imgs[2], sRes = sImg.getResolution(), sOri = sImg.getOrigin();
+    var x0 = fw.origin[0] + fw.window[0] * fw.res[0], y0 = fw.origin[1] + fw.window[1] * fw.res[1];
+    var x1 = fw.origin[0] + fw.window[2] * fw.res[0], y1 = fw.origin[1] + fw.window[3] * fw.res[1];
+    var sc0 = Math.max(0, Math.floor((x0 - sOri[0]) / sRes[0])), sr0 = Math.max(0, Math.floor((y0 - sOri[1]) / sRes[1]));
+    var sc1 = Math.min(sImg.getWidth(), Math.ceil((x1 - sOri[0]) / sRes[0])), sr1 = Math.min(sImg.getHeight(), Math.ceil((y1 - sOri[1]) / sRes[1]));
+    var sw = sc1 - sc0, scl = (await sImg.readRasters({ window: [sc0, sr0, sc1, sr1], samples: [0] }))[0];
+    var red = rs[0][0], nir = rs[1][0], off = s2Offset(item), ndvi = new Float32Array(fw.w * fw.h);
+    for (var i = 0; i < ndvi.length; i++) {
+      if (!fw.mask[i]) { ndvi[i] = NaN; continue; }
+      var r = Math.floor(i / fw.w), c = i - r * fw.w;
+      var x = fw.origin[0] + (fw.window[0] + c + 0.5) * fw.res[0], y = fw.origin[1] + (fw.window[1] + r + 0.5) * fw.res[1];
+      var qc = Math.floor((x - sOri[0]) / sRes[0]) - sc0, qr = Math.floor((y - sOri[1]) / sRes[1]) - sr0;
+      var sv = qc >= 0 && qr >= 0 && qc < sw && qr < sr1 - sr0 ? scl[qr * sw + qc] : 0;
+      var R = red[i] - off, N = nir[i] - off;
+      ndvi[i] = sclValid(sv) && red[i] > 0 && nir[i] > 0 && R > 0 && N > 0 ? (N - R) / (N + R) : NaN;
+    }
+    var st = stats(ndvi, fw, null, 0);
+    return { date: dateOf(item.properties.datetime), src: 'Sentinel-2', fam: 'S2', id: item.id, ndvi: ndvi, fw: fw, value: st.value, nValid: st.nValid };
+  }
+
+  /** Hakee ja laskee Sentinel-2 L2A -havainnot. Palauttaa { obs, searched, skipped }. */
+  async function fetchS2(field, start, end, opts) {
+    var o = defaults(opts);
+    o.onProgress('Haetaan Sentinel-2-kuvalista Planetary Computerista…');
+    var items = await s2Search(field, start, end, o);
+    o.onProgress('Löytyi ' + items.length + ' Sentinel-2-kuvaa. Luetaan lohkon pikselit…', 0, items.length);
+    var done = 0, skipped = [];
+    var raw = await pool(items, o.concurrency, async function (it) {
+      var r = null;
+      try { r = await s2Item(it, field, o); } catch (e) { skipped.push(it.id + ': ' + e.message); }
+      done++; o.onProgress('Sentinel-2: ' + done + '/' + items.length + ' kuvaa käsitelty', done, items.length);
+      return r;
+    }, o.signal);
+    return { obs: finalize(raw, o), searched: items.length, skipped: skipped };
+  }
+
   // ---------- PlanetScope ----------
   function plAuth(key) {
     var b = typeof btoa === 'function' ? btoa(key + ':') : Buffer.from(key + ':').toString('base64');
@@ -485,6 +564,7 @@
     pointInPolys: pointInPolys, distToEdges: distToEdges, fieldWindow: fieldWindow,
     fmaskValid: fmaskValid, median: median, stats: stats, finalize: finalize,
     hlsSearch: hlsSearch, fetchHls: fetchHls, signHref: signHref,
+    s2Search: s2Search, fetchS2: fetchS2, sclValid: sclValid, s2Offset: s2Offset,
     psSearch: psSearch, psOrder: psOrder, psOrderStatus: psOrderStatus, psProcess: psProcess,
     _setGeoTIFF: function (g) { GT = g; }, _clearSas: function () { sasCache = {}; },
     ENDPOINTS: { PC_STAC: PC_STAC, PC_SAS: PC_SAS, PL_DATA: PL_DATA, PL_ORDERS: PL_ORDERS }

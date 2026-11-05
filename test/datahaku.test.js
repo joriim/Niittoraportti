@@ -44,6 +44,16 @@ const PAGE2 = [
   hlsItem('HLS.S30.T35VLK.2026217T094029.v2.0', 'hls2-s30', '2026-08-05', 'hls4', 'B8A', 32635),
   hlsItem('HLS.L30.T34VFQ.2026227T093522.v2.0', 'hls2-l30', '2026-08-15', 'hls5', 'B05', 32634),
 ];
+const s2blob = (f) => `https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/35/V/LL/2026/${f}`;
+function s2ItemFx(id, date, prefix, baseline) {
+  return { id, collection: 'sentinel-2-l2a', properties: { datetime: date + 'T09:50:31Z', 'proj:epsg': 32635, 's2:processing_baseline': baseline },
+    assets: { B04: { href: s2blob(prefix + '.B04.tif') }, B08: { href: s2blob(prefix + '.B08.tif') }, SCL: { href: s2blob(prefix + '.SCL.tif') } } };
+}
+const S2_ITEMS = [
+  s2ItemFx('S2B_MSIL2A_20260710T095029_N0511_R079_T35VLL_20260710T120000', '2026-07-10', 's2a', '05.11'),
+  s2ItemFx('S2A_MSIL2A_20260728T095031_N0511_R079_T35VLL_20260728T120000', '2026-07-28', 's2b', '05.11'),
+  s2ItemFx('S2C_MSIL2A_20260817T095029_N0511_R079_T35VLL_20260817T120000', '2026-08-17', 's2c', '05.11'),
+];
 const PS = ['20260801_093000_00_2475', '20260810_093100_00_2475'];
 const KEY = 'PLAK-testi';
 const AUTH = 'Basic ' + Buffer.from(KEY + ':').toString('base64');
@@ -54,12 +64,18 @@ global.fetch = async (url, req) => {
   const E = H.ENDPOINTS;
   if (url === E.PC_STAC + '/search') {
     const b = JSON.parse(req.body);
+    if (b.collections[0] === 'sentinel-2-l2a') { assert.strictEqual(b.collections.length, 1); return json({ features: S2_ITEMS, links: [] }); }
     assert.deepStrictEqual(b.collections, ['hls2-s30', 'hls2-l30']);
     assert.strictEqual(b.intersects.type, 'Polygon');
     if (b.token === 'p2') return json({ features: PAGE2, links: [] });
     return json({ features: PAGE1, links: [{ rel: 'next', method: 'POST', href: E.PC_STAC + '/search', body: { token: 'p2' } }] });
   }
   if (url === E.PC_SAS + '/hls2euwest/hls2') return json({ token: 'sv=2024&sig=abc', 'msft:expiry': new Date(Date.now() + 3600e3).toISOString() });
+  if (url === E.PC_SAS + '/sentinel2l2a01/sentinel2-l2') return json({ token: 'sv=2024&sig=s2', 'msft:expiry': new Date(Date.now() + 3600e3).toISOString() });
+  if (url.startsWith('https://sentinel2l2a01.blob.core.windows.net/')) {
+    assert.ok(url.includes('sig=s2'), 'Sentinel-2-blob allekirjoitettu');
+    return fileResponse(url.split('/').pop().split('?')[0], req);
+  }
   if (url.startsWith('https://hls2euwest.blob.core.windows.net/')) {
     assert.ok(url.includes('sig=abc'), 'blob-osoite allekirjoitettu');
     return fileResponse(url.split('/').pop().split('?')[0], req);
@@ -156,7 +172,7 @@ global.fetch = async (url, req) => {
   });
 
   await t('reunapuskuri: pikselin keskipisteen on oltava vähintään puskurin päässä reunasta', async () => {
-    const img = await (await GT.fromArrayBuffer(fs.readFileSync(path.join(FX, 'hls1.B04.tif')).buffer)).getImage();
+    const img = await (await GT.fromArrayBuffer((() => { const b = fs.readFileSync(path.join(FX, 'hls1.B04.tif')); return b.buffer.slice(b.byteOffset, b.byteOffset + b.length); })())).getImage();
     assert.strictEqual(H.fieldWindow(img, 32635, field, 0).n, 60);
     assert.strictEqual(H.fieldWindow(img, 32635, field, 10).n, 54);
     assert.strictEqual(H.fieldWindow(img, 32635, field, 40).n, 28);
@@ -168,6 +184,38 @@ global.fetch = async (url, req) => {
     assert.ok(r.best, 'tapahtuma löytyy');
     assert.strictEqual(r.best.start, '2026-07-10');
     assert.strictEqual(r.best.end, '2026-08-05');
+  });
+
+  let s2;
+  await t('Sentinel-2 L2A: SCL-maski, 20 m → 10 m ja +1000 siirtymä', async () => {
+    s2 = await H.fetchS2(field, '2026-07-01', '2026-08-31', { bufferM: 10 });
+    assert.strictEqual(s2.searched, 3);
+    assert.deepStrictEqual(s2.skipped, []);
+    const by = Object.fromEntries(s2.obs.map((o) => [o.date, o]));
+    assert.deepStrictEqual(Object.keys(by), ['2026-07-10', '2026-07-28', '2026-08-17']);
+    assert.deepStrictEqual([by['2026-07-10'].src, by['2026-07-10'].value, by['2026-07-10'].valid], ['Sentinel-2', 0.8, 100]);
+    assert.ok(by['2026-07-28'].valid < 50, 'pilvinen pohjoisosa hylätty: ' + by['2026-07-28'].valid);
+    assert.strictEqual(by['2026-08-17'].value, 0.45, 'siirtymä vähennetty ennen NDVI:tä');
+    assert.strictEqual(by['2026-08-17'].valid, 100, 'paljas maa (SCL 5) kelpaa');
+    assert.strictEqual(by['2026-08-17'].changed, 100, 'muutos verrataan 10.7. kuvaan');
+  });
+
+  await t('Sentinel-2: SCL-luokat ja prosessointiversion siirtymä', () => {
+    [4, 5, 6].forEach((v) => assert.ok(H.sclValid(v)));
+    [0, 1, 2, 3, 7, 8, 9, 10, 11].forEach((v) => assert.ok(!H.sclValid(v), 'hylätään ' + v));
+    assert.strictEqual(H.s2Offset({ properties: { 's2:processing_baseline': '05.11' } }), 1000);
+    assert.strictEqual(H.s2Offset({ properties: { 's2:processing_baseline': '03.01' } }), 0);
+    assert.strictEqual(H.s2Offset({ properties: { datetime: '2021-07-01T10:00:00Z' } }), 0);
+  });
+
+  await t('lähdevertailu: Sentinel-2 vs HLS samalle lohkolle', () => {
+    const C = require('../core.js');
+    const r = C.compareSources(hls.obs.concat(s2.obs), { measure: 'Luonnonhoitonurmi' });
+    assert.deepStrictEqual(r.rows.map((x) => x.key), ['S2', 'HLS-S30', 'HLS']);
+    const by = Object.fromEntries(r.rows.map((x) => [x.key, x]));
+    assert.ok(by.S2.detected && by.HLS.detected);
+    assert.strictEqual(by.S2.windowDays, 38);
+    assert.strictEqual(by.HLS.windowDays, 26);
   });
 
   let sel;

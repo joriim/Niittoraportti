@@ -10,7 +10,7 @@
 (function (root) {
   'use strict';
 
-  var VERSION = '2.0.0';
+  var VERSION = '2.1.0';
 
   // Lähde → sensoriperhe. Pudotus lasketaan vain saman perheen havaintojen välillä,
   // koska eri sensoreiden NDVI-tasot eivät ole suoraan vertailukelpoisia.
@@ -46,7 +46,7 @@
     minChanged: 90,     // oma: tukiehto koskee koko lohkoa → ≥ 90 % pikseleistä muuttunut
     confMin: 0.6,       // oma todennäköisyysraja (vrt. Ruokaviraston status-kohtainen raja)
     bufferM: 10,        // raportoitava parametri; Kolecka ym. 2018: kutistettu lohko parantaa tulosta
-    cloudMask: 'HLS: Fmask (sirrus, pilvi, pilven viereinen, varjo, lumi, aerosoli korkea); PlanetScope: UDM2 clear'
+    cloudMask: 'HLS: Fmask (sirrus, pilvi, pilven viereinen, varjo, lumi, aerosoli korkea); Sentinel-2 L2A: SCL (kelpaavat luokat 4–6); PlanetScope: UDM2 clear'
   };
 
   function days(a, b) { return (Date.parse(b) - Date.parse(a)) / 864e5; }
@@ -239,6 +239,76 @@
     return { version: VERSION, params: p, rule: rule, used: prep.used, excluded: prep.excluded, rejected: rejected, events: events, best: best, verdict: verdict };
   }
 
+  // ---------- Lähdevertailu ----------
+  // Ajaa saman tunnistuksen kullekin lähdeyhdistelmälle ja vertaa, kuinka tiheästi lohko nähtiin,
+  // tunnistettiinko niitto ja kuinka tarkasti sen ajankohta rajautui (niittovälin pituus).
+  var SCENARIOS = [
+    { key: 'S2', label: 'Sentinel-2 L2A', srcs: ['Sentinel-2'] },
+    { key: 'HLS-S30', label: 'HLS ilman Landsatia (S30)', srcs: ['HLS-S30'], needs: ['HLS-L30'] },
+    { key: 'HLS', label: 'HLS (Sentinel-2 + Landsat)', srcs: ['HLS-S30', 'HLS-L30'] },
+    { key: 'PS', label: 'PlanetScope', srcs: ['PlanetScope'] },
+    { key: 'S2+PS', label: 'Sentinel-2 + PlanetScope', srcs: ['Sentinel-2', 'PlanetScope'] },
+    { key: 'HLS+PS', label: 'HLS + PlanetScope', srcs: ['HLS-S30', 'HLS-L30', 'PlanetScope'] },
+    { key: 'ALL', label: 'HLS + PlanetScope + Sentinel-1', srcs: ['HLS-S30', 'HLS-L30', 'PlanetScope', 'Sentinel-1 koherenssi'] }
+  ];
+  function gapStats(dates) {
+    var u = dates.filter(function (d, i) { return dates.indexOf(d) === i; }).sort(), g = [];
+    for (var i = 1; i < u.length; i++) g.push(days(u[i - 1], u[i]));
+    if (!g.length) return { n: u.length, median: null, max: null };
+    var s = g.slice().sort(function (a, b) { return a - b; }), m = s.length >> 1;
+    return { n: u.length, median: s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2, max: s[s.length - 1] };
+  }
+  function compareSources(obs, opts) {
+    var p = Object.assign({}, DEFAULTS, opts || {});
+    var present = {};
+    prepare(obs, p).used.forEach(function (o) { present[o.src] = true; });
+    var famsPresent = {};
+    Object.keys(present).forEach(function (s) { famsPresent[FAMILY[s]] = true; });
+    var rows = [];
+    SCENARIOS.forEach(function (sc) {
+      var fams = {}; sc.srcs.forEach(function (s) { fams[FAMILY[s]] = true; });
+      // jokaisen perheen on oltava mukana, ja HLS vaatii vähintään yhden HLS-lähteen
+      if (!Object.keys(fams).every(function (f) { return famsPresent[f]; })) return;
+      if ((sc.needs || []).some(function (s) { return !present[s]; })) return;
+      if (sc.key === 'ALL' && !famsPresent.PS) return;
+      var sub = obs.filter(function (o) { return o && sc.srcs.indexOf(o.src) >= 0; });
+      var res = analyze(sub, p);
+      var opt = res.used.filter(function (o) { return o.fam !== 'S1'; });
+      var g = gapStats(opt.map(function (o) { return o.date; }));
+      var b = res.best;
+      rows.push({ key: sc.key, label: sc.label, fams: Object.keys(fams).length, nObs: g.n, excluded: res.excluded.length,
+        gapMedian: g.median, gapMax: g.max, detected: !!b, start: b ? b.start : null, end: b ? b.end : null,
+        windowDays: b ? days(b.start, b.end) : null, conf: b ? b.conf : null, level: res.verdict.level, label2: res.verdict.label });
+    });
+    return { rows: rows, summary: compareSummary(rows) };
+  }
+  // Johtopäätös: verrataan jokaista vaihtoehtoa perustasoon, joka on pelkkä Sentinel-2
+  // (sama aineisto kuin Ruokaviraston seurannassa) tai sen puuttuessa HLS S30.
+  function compareSummary(rows) {
+    if (rows.length < 2) return null;
+    var base = rows.filter(function (r) { return r.key === 'S2'; })[0] || rows.filter(function (r) { return r.key === 'HLS-S30'; })[0] || rows[0];
+    var others = rows.filter(function (r) { return r !== base && !(base.key === 'S2' && r.key === 'HLS-S30'); });
+    var fiD = function (n) { return Math.round(n) + ' vrk'; }, c2 = function (x) { return x.toFixed(2).replace('.', ','); };
+    var out = [];
+    out.push(base.label + (base.detected ? ': niittoväli ' + fi(base.start) + '–' + fi(base.end) + ' (' + fiD(base.windowDays) + '), luottamus ' + c2(base.conf) + '.' : ' yksinään ei tunnistanut niittoa.'));
+    var s2 = rows.filter(function (r) { return r.key === 'S2' || r.key === 'HLS-S30'; })[0], hls = rows.filter(function (r) { return r.key === 'HLS'; })[0];
+    if (s2 && hls && s2.gapMedian != null && hls.gapMedian != null && hls.nObs > s2.nObs) {
+      out.push('Landsat tihensi kuvausta: HLS:ssä ' + hls.nObs + ' kelvollista päivää, ' + (s2.key === 'S2' ? 'Sentinel-2:ssa ' : 'S30:ssä ') + s2.nObs + ' (mediaaniväli ' + fiD(hls.gapMedian) + ' vs ' + fiD(s2.gapMedian) + ').');
+    }
+    var det = others.filter(function (r) { return r.detected; }).sort(function (a, b) { return a.windowDays - b.windowDays || b.conf - a.conf; });
+    var best = det[0] || null, verdict = 'same';
+    if (!best) out.push('Muutkaan lähteet tai yhdistelmät eivät tunnistaneet niittoa.');
+    else if (!base.detected) { verdict = 'better'; out.push('Niitto tunnistettiin vasta lisälähteillä: ' + best.label + ' (niittoväli ' + fiD(best.windowDays) + ').'); }
+    else {
+      var d = base.windowDays - best.windowDays;
+      if (d >= 2) { verdict = 'better'; out.push(best.label + ' rajasi niiton ' + fiD(best.windowDays) + ' väliin, ' + fiD(d) + ' tarkemmin kuin ' + base.label + '.'); }
+      else if (best.conf > base.conf + 0.05) { verdict = 'better'; out.push('Lisälähteet eivät kaventaneet niittoväliä, mutta nostivat luottamusta ' + c2(base.conf) + ' → ' + c2(best.conf) + ' (' + best.label + ').'); }
+      else out.push('Lisälähteet eivät kaventaneet niittoväliä eivätkä nostaneet luottamusta.');
+    }
+    others.filter(function (r) { return !r.detected && base.detected; }).forEach(function (r) { out.push(r.label + ' ei tunnistanut niittoa.'); });
+    return { verdict: verdict, base: base.key, best: best ? best.key : null, text: out };
+  }
+
   // Lyhyt lisätietoteksti Vipu-mobiiliin. Varovainen muotoilu: "viittaavat", ei "todennettu".
   function reportText(res, lohko, measure) {
     var b = res.best;
@@ -247,7 +317,7 @@
     var parts = [];
     parts.push('Satelliittihavainnot viittaavat niittoon (' + res.verdict.label.toLowerCase() + ', luottamus ' + b.conf.toFixed(2).replace('.', ',') + ') kasvulohkolla ' + lohko + (measure ? ' (' + measure + ')' : '') + ' välillä ' + fi(b.start) + '–' + fi(b.end) + '.');
     if (opt) {
-      parts.push(nameOf(opt.fam) + ': NDVI' + opt.before.value.toFixed(2).replace('.', ',') + ' → ' + opt.after.value.toFixed(2).replace('.', ',') + (opt.changed != null ? ', muuttunut ' + opt.changed + ' % lohkosta' : '') + '.');
+      parts.push(nameOf(opt.fam) + ': NDVI ' + opt.before.value.toFixed(2).replace('.', ',') + ' → ' + opt.after.value.toFixed(2).replace('.', ',') + (opt.changed != null ? ', muuttunut ' + opt.changed + ' % lohkosta' : '') + '.');
       parts.push('Kuvat: ' + (opt.before.id || '[tunniste]') + ', ' + (opt.after.id || '[tunniste]') + '.');
     }
     if (b.fams.indexOf('S1') >= 0) parts.push('Sentinel-1-koherenssi vahvistaa.');
@@ -255,7 +325,7 @@
     return parts.join(' ');
   }
 
-  var api = { VERSION: VERSION, FAMILY: FAMILY, SOURCES: SOURCES, RULES: RULES, DEFAULTS: DEFAULTS, analyze: analyze, reportText: reportText, fi: fi };
+  var api = { VERSION: VERSION, FAMILY: FAMILY, SOURCES: SOURCES, RULES: RULES, DEFAULTS: DEFAULTS, analyze: analyze, reportText: reportText, fi: fi, compareSources: compareSources, SCENARIOS: SCENARIOS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.NiittoCore = api;
 })(this);

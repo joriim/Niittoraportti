@@ -143,3 +143,65 @@ t('huomautusten taivutus: 1 huomautus, 2 huomautusta', () => {
   assert.match(one.verdict.detail, /^1 huomautus päätunnistuksessa$/);
 });
 console.log('taivutustesti läpi');
+
+// ---------- Lähdevertailu ----------
+// Keksitty kausi: niitto 6.8. Sentinel-2 näkee lohkon harvoin pilvien takia, Landsat ja PlanetScope tihentävät.
+const season = [
+  { date: '2026-07-10', src: 'Sentinel-2', id: 's1', value: 0.80, valid: 100 },
+  { date: '2026-07-10', src: 'HLS-S30', id: 'h1', value: 0.78, valid: 100 },
+  { date: '2026-07-28', src: 'Sentinel-2', id: 's2', value: 0.12, valid: 10 },   // pilvessä
+  { date: '2026-07-28', src: 'HLS-S30', id: 'h2', value: 0.10, valid: 10 },
+  { date: '2026-08-01', src: 'HLS-L30', id: 'l1', value: 0.79, valid: 95 },
+  { date: '2026-08-09', src: 'HLS-L30', id: 'l2', value: 0.47, valid: 96, changed: 95 },
+  { date: '2026-08-17', src: 'Sentinel-2', id: 's3', value: 0.50, valid: 100, changed: 96 },
+  { date: '2026-08-17', src: 'HLS-S30', id: 'h3', value: 0.48, valid: 100, changed: 94 },
+  { date: '2026-08-22', src: 'Sentinel-2', id: 's4', value: 0.53, valid: 100 },
+  { date: '2026-08-22', src: 'HLS-S30', id: 'h4', value: 0.51, valid: 100 },
+  { date: '2026-08-04', src: 'PlanetScope', id: 'p1', value: 0.84, valid: 100 },
+  { date: '2026-08-07', src: 'PlanetScope', id: 'p2', value: 0.50, valid: 99, changed: 97 },
+  { date: '2026-08-12', src: 'PlanetScope', id: 'p3', value: 0.55, valid: 98 },
+];
+
+t('lähdevertailu: skenaariot vain saatavilla oleville lähteille', () => {
+  const only = C.compareSources(season.filter((o) => o.src === 'Sentinel-2' || o.src === 'HLS-S30'), {});
+  assert.deepStrictEqual(only.rows.map((r) => r.key), ['S2', 'HLS']);
+  const all = C.compareSources(season, {});
+  assert.deepStrictEqual(all.rows.map((r) => r.key), ['S2', 'HLS-S30', 'HLS', 'PS', 'S2+PS', 'HLS+PS']);
+});
+
+t('lähdevertailu: lisälähteet kaventavat niittoväliä', () => {
+  const r = C.compareSources(season, { measure: 'Luonnonhoitonurmi' });
+  const by = Object.fromEntries(r.rows.map((x) => [x.key, x]));
+  assert.strictEqual(by.S2.windowDays, 38);           // 10.7.–17.8.
+  assert.strictEqual(by.HLS.windowDays, 8);           // Landsat: 1.8.–9.8.
+  assert.strictEqual(by.PS.windowDays, 3);            // 4.8.–7.8.
+  assert.ok(by.HLS.nObs > by.S2.nObs, 'Landsat tihentää');
+  assert.ok(by.S2.gapMedian > by.HLS.gapMedian);
+  assert.strictEqual(r.summary.verdict, 'better');
+  assert.ok(r.summary.text.some((s) => /Landsat tihensi kuvausta/.test(s)));
+  assert.strictEqual(r.summary.base, 'S2');
+  assert.strictEqual(r.summary.best, 'S2+PS', 'yhdistelmä: sama 3 vrk väli kuin PlanetScopella, korkeampi luottamus');
+  assert.ok(r.summary.text.some((s) => /Sentinel-2 \+ PlanetScope rajasi niiton 3 vrk väliin, 35 vrk tarkemmin/.test(s)));
+});
+
+t('lähdevertailu: sama tulos, jos lisälähde ei tuo uutta', () => {
+  const same = [
+    { date: '2026-07-01', src: 'HLS-S30', value: 0.80, valid: 100 },
+    { date: '2026-07-06', src: 'HLS-S30', value: 0.45, valid: 100, changed: 95 },
+    { date: '2026-07-11', src: 'HLS-S30', value: 0.47, valid: 100 },
+    { date: '2026-07-01', src: 'PlanetScope', value: 0.82, valid: 100 },
+    { date: '2026-07-06', src: 'PlanetScope', value: 0.46, valid: 100, changed: 96 },
+    { date: '2026-07-11', src: 'PlanetScope', value: 0.48, valid: 100 },
+  ];
+  const r = C.compareSources(same, {});
+  assert.strictEqual(r.summary.base, 'HLS', 'ilman Sentinel-2:ta ja Landsatia perustaso on HLS');
+  assert.ok(['same', 'better'].includes(r.summary.verdict));
+  assert.strictEqual(r.rows.find((x) => x.key === 'HLS+PS').windowDays, 5);
+});
+t('lähdevertailu: Landsat (HLS) tarkentaa pelkkää Sentinel-2:ta', () => {
+  const r = C.compareSources(season.filter((o) => o.src !== 'PlanetScope'), {});
+  assert.strictEqual(r.summary.verdict, 'better');
+  assert.strictEqual(r.summary.best, 'HLS');
+  assert.ok(r.summary.text.some((s) => /HLS \(Sentinel-2 \+ Landsat\) rajasi niiton 8 vrk väliin, 30 vrk tarkemmin/.test(s)));
+});
+console.log('lähdevertailutestit läpi');

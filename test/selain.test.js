@@ -31,6 +31,10 @@ function tiff(route, file) {
 }
 const J = (route, o) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(o), headers: { 'Access-Control-Allow-Origin': '*' } });
 const blob = (f) => `https://hls2euwest.blob.core.windows.net/hls2/x/${f}`;
+const s2b = (f) => `https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/x/${f}`;
+const s2 = (id, d, p) => ({ id, collection: 'sentinel-2-l2a', properties: { datetime: d + 'T09:50:00Z', 'proj:epsg': 32635, 's2:processing_baseline': '05.11' },
+  assets: { B04: { href: s2b(p + '.B04.tif') }, B08: { href: s2b(p + '.B08.tif') }, SCL: { href: s2b(p + '.SCL.tif') } } });
+const S2 = [s2('S2B_MSIL2A_20260710', '2026-07-10', 's2a'), s2('S2A_MSIL2A_20260728', '2026-07-28', 's2b'), s2('S2C_MSIL2A_20260817', '2026-08-17', 's2c')];
 const item = (id, c, d, p, nir, e) => ({ id, collection: c, properties: { datetime: d + 'T09:40:00Z', 'proj:epsg': e },
   assets: { B04: { href: blob(p + '.B04.tif') }, [nir]: { href: blob(`${p}.${nir}.tif`) }, Fmask: { href: blob(p + '.Fmask.tif') } } });
 
@@ -45,6 +49,7 @@ const item = (id, c, d, p, nir, e) => ({ id, collection: c, properties: { dateti
   await page.route('https://planetarycomputer.microsoft.com/**', (route) => {
     const u = route.request().url();
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'POST,GET' } });
+    if (u.endsWith('/search') && JSON.parse(route.request().postData()).collections[0] === 'sentinel-2-l2a') return J(route, { features: S2 });
     if (u.endsWith('/search')) return J(route, { features: [
       item('HLS.S30.T35VLL.2026191T094031.v2.0', 'hls2-s30', '2026-07-10', 'hls1', 'B8A', 32635),
       item('HLS.L30.T35VLL.2026201T093522.v2.0', 'hls2-l30', '2026-07-20', 'hls2', 'B05', 32635),
@@ -53,6 +58,7 @@ const item = (id, c, d, p, nir, e) => ({ id, collection: c, properties: { dateti
     if (u.includes('/sas/v1/token/')) return J(route, { token: 'sig=abc', 'msft:expiry': new Date(Date.now() + 3600e3).toISOString() });
     return route.fulfill({ status: 404 });
   });
+  await page.route('https://sentinel2l2a01.blob.core.windows.net/**', (route) => tiff(route, route.request().url().split('/').pop().split('?')[0]));
   await page.route('https://hls2euwest.blob.core.windows.net/**', (route) => tiff(route, route.request().url().split('/').pop().split('?')[0]));
   await page.route('https://api.planet.com/**', (route) => {
     const r = route.request(), u = r.url();
@@ -68,14 +74,19 @@ const item = (id, c, d, p, nir, e) => ({ id, collection: c, properties: { dateti
   });
 
   await page.goto(url);
+  await page.$eval('#geoBox', (d) => { d.open = true; });
   await page.fill('#geo', fs.readFileSync(path.join(FX, 'field.geojson'), 'utf8'));
   await page.dispatchEvent('#geo', 'input');
   assert.match(await page.textContent('#geoMsg'), /6,00 ha · EPSG:3067/);
+  assert.match(await page.textContent('#parcelCard'), /TESTI-1.*6,00 ha/);
+  await page.click('#toStep2');
   assert.strictEqual(await page.inputValue('#lohko'), 'TESTI-1');
   await page.fill('#dStart', '2026-07-01'); await page.fill('#dEnd', '2026-08-31');
+  assert.ok(await page.isChecked('#srcHls'), 'HLS oletuksena');
 
-  await page.click('#hlsGo');
-  await page.waitForSelector('#fetchLog li.ok', { timeout: 20000 });
+  await page.click('#runGo');
+  assert.ok(await page.isVisible('#step3'), 'haku siirtää tulokseen');
+  await page.waitForSelector('#fetchLog li.ok', { state: 'attached', timeout: 20000 });
   const rows = await page.$$eval('#obsTable tbody tr', (trs) => trs.map((tr) => [tr.querySelector('.d').value, tr.querySelector('.s').value, tr.querySelector('.v').value, tr.querySelector('.va').value, tr.querySelector('.ch').value]));
   assert.deepStrictEqual(rows.map((r) => r[0]), ['2026-07-10', '2026-07-20', '2026-08-05', '2026-08-15']);
   assert.deepStrictEqual(rows[2], ['2026-08-05', 'HLS-S30', '0.45', '100', '94']);
@@ -84,6 +95,9 @@ const item = (id, c, d, p, nir, e) => ({ id, collection: c, properties: { dateti
   console.log('ok HLS-haku täyttää taulukon ja tunnistus löytää niiton:', verdict.replace(/\s+/g, ' ').slice(0, 120));
   await page.screenshot({ path: path.join(process.env.SHOT_DIR || require('os').tmpdir(), 'selain_hls.png'), fullPage: false });
 
+  assert.ok(!(await page.isVisible('#compare')), 'vertailu vasta, kun lähteitä on useampi');
+  assert.match(await page.textContent('#facts'), /Niittoväli\s*10\.7\.–5\.8\./);
+  await page.click('#stepNav button[data-step="2"]');
   await page.click('#psBox > summary'); // PlanetScope on neuvojille suljettuna
   await page.fill('#plKey', 'PLAK-testi');
   await page.click('#psSearch');
@@ -102,6 +116,33 @@ const item = (id, c, d, p, nir, e) => ({ id, collection: c, properties: { dateti
   assert.strictEqual(key, null, 'avainta ei tallenneta ilman valintaa');
   assert.ok(await page.$eval('#fetchStop', (b) => getComputedStyle(b).display === 'none'), 'Keskeytä piilossa');
   console.log('ok PlanetScope-haku, tilaus ja käsittely; avain ei päädy tallennukseen');
+
+  // Sentinel-2 ja lähdevertailu
+  await page.click('#stepNav button[data-step="2"]');
+  await page.check('#srcBoth');
+  await page.click('#runGo');
+  await page.waitForFunction(() => /Sentinel-2: 3 havaintoa/.test(document.getElementById('fetchLog').textContent), null, { timeout: 20000 });
+  const srcs2 = await page.$$eval('#obsTable tbody tr .s', (s) => s.map((x) => x.value));
+  assert.strictEqual(srcs2.filter((s) => s === 'Sentinel-2').length, 3);
+  assert.strictEqual(srcs2.filter((s) => s === 'PlanetScope').length, 2, 'PlanetScope säilyy');
+  assert.ok(await page.isVisible('#compare'));
+  const cmp = await page.$$eval('#cmpTable tbody tr td:first-child', (td) => td.map((x) => x.textContent));
+  assert.deepStrictEqual(cmp, ['Sentinel-2 L2A', 'HLS ilman Landsatia (S30)', 'HLS (Sentinel-2 + Landsat)', 'PlanetScope', 'Sentinel-2 + PlanetScope', 'HLS + PlanetScope']);
+  assert.match(await page.textContent('#cmpSummary'), /Sentinel-2 L2A: niittoväli 10\.7\.2026–17\.8\.2026 \(38 vrk\)/);
+  assert.match(await page.textContent('#checks'), /Sentinel-2 L2A on mukana vain lähdevertailussa/);
+  assert.ok(!/Sentinel-2/.test(await page.textContent('#verdict')), 'pääarvio ei laske Sentinel-2:ta erilliseksi lähteeksi');
+  const rep = await page.evaluate(() => { let o = null; const real = URL.createObjectURL; URL.createObjectURL = (b) => { o = b; return real.call(URL, b); }; document.getElementById('dlJson').click(); URL.createObjectURL = real; return o && o.text(); });
+  assert.ok(JSON.parse(rep).lahdevertailu.rivit.length === 6, 'vertailu raportissa');
+  // vain Sentinel-2: HLS-rivit poistuvat
+  await page.click('#stepNav button[data-step="2"]');
+  await page.check('#srcS2'); await page.click('#runGo');
+  await page.waitForFunction(() => /Sentinel-2: 3 havaintoa/.test(document.getElementById('fetchLog').textContent), null, { timeout: 20000 });
+  const srcs3 = await page.$$eval('#obsTable tbody tr .s', (s) => s.map((x) => x.value));
+  assert.ok(!srcs3.some((s) => /^HLS/.test(s)), 'pelkkä Sentinel-2');
+  assert.match(await page.textContent('#verdict'), /Sentinel-2/);
+  console.log('ok Sentinel-2-haku, pelkkä Sentinel-2 ja lähdevertailu (Sentinel-2 vs HLS vs PlanetScope)');
+  await page.screenshot({ path: path.join(process.env.SHOT_DIR || require('os').tmpdir(), 'selain_vertailu.png'), fullPage: true });
+  await page.click('#stepNav button[data-step="2"]');
   await page.click('#toCreds');
   assert.ok(await page.$eval('#tunnukset', (d) => d.open));
   await page.setViewportSize({ width: 390, height: 900 });

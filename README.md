@@ -6,13 +6,15 @@
 - oikeusperustan, johon vaatimus vastata Vipu-mobiilin kameralla perustuu: EU-asetukset (EU) 2021/2116 ja 2022/1173 sekä laki 1334/2022, 21 §
 - ehdotuksen porrastetusta todentamisesta HLS:llä ja PlanetScopella
 - **niiton tunnistuksen**, joka seuraa Ruokaviraston satelliittiseurannan rakennetta (aikasarja → muutos → pysyvyys → todennäköisyysraja). Tunnistus toteutetaan avoimella Sen4CAP-niittoalgoritmilla (De Vroey ym. 2022), ja lähteinä ovat HLS, Sentinel-2, PlanetScope ja Sentinel-1-koherenssi. Tuloksena saadaan lisätietoteksti Vipu-mobiiliin ja toistettava JSON-raportti.
-- **datahaun**, joka hakee lohkolle HLS-kuvat (ilman tunnusta) ja PlanetScope-kuvat (Planet-API-avaimella) ja laskee niistä havaintotaulukon suoraan selaimessa
+- **datahaun**, joka hakee lohkolle HLS- tai Sentinel-2 L2A -kuvat (ilman tunnusta) ja PlanetScope-kuvat (Planet-API-avaimella) ja laskee niistä havaintotaulukon suoraan selaimessa
+- **lähdevertailun**, joka ajaa tunnistuksen erikseen Sentinel-2:lle, HLS:lle, PlanetScopelle ja niiden yhdistelmille ja kertoo, tarkentavatko lisälähteet niittoajankohtaa (menetelmä: `METHOD.md`, Lähdevertailu)
 
 Kaikki laskenta tapahtuu selaimessa. Vain datahaussa ja lohkon valinnassa tietoa lähetetään palveluihin: lohkon rajaus hakupalveluun (Microsoft Planetary Computer tai Planet), peruslohkotunnus tai klikkauspiste Ruokaviraston rajapintaan ja karttanäkymän tiilipyynnöt MML:lle tai OpenStreetMapille. Muuta tietoa ei lähetetä minnekään.
 
 | Tiedosto | Sisältö |
 | --- | --- |
-| `index.html` | sovellus |
+| `index.html` | sovellus: artikkeli ja kolmivaiheinen työkalu (lohko → tiedot → tulos) |
+| `sovellus.js` | työkalun käyttöliittymä |
 | `core.js` | tunnistuslogiikka ilman DOM-riippuvuuksia |
 | `datahaku.js` | HLS- ja PlanetScope-haku sekä pikselilaskenta selaimessa |
 | `kartta.js` | lohkon valinta: peruslohkotunnus, kartta (MML, Ruokavirasto) ja piirto |
@@ -56,9 +58,15 @@ python scripts/hae_kasvulohkot.py --peruslohko 1641431471 --vuodet 2025
 
 Skripti kirjoittaa jokaisesta kasvulohkosta tiedoston `lohko_<tunnus>.geojson` (WGS84), jonka voi avata sovelluksessa tai antaa `hae_havainnot.py --lohko` -parametriksi.
 
-### HLS: ei tunnusta
+### Käyttö vaiheittain
 
-Sovellus hakee NASAn HLS v2.0 -aineiston (S30 ja L30) Microsoftin Planetary Computerista. Lukuoikeus (SAS-token) haetaan automaattisesti.
+1. **Lohko.** Kirjoita lohkon tunnus, osoite, paikannimi tai koordinaatit, käytä puhelimen sijaintia tai klikkaa lohkoa kartalla.
+2. **Tiedot.** Vahvista tukiehto, aikaväli ja kuvalähde: HLS (oletus), pelkkä Sentinel-2 tai molemmat ja lähdevertailu. Raja-arvot ja PlanetScope ovat lisäasetuksissa.
+3. **Tulos.** Näytön vahvuus, avainluvut, NDVI-käyrä, lähdevertailu sekä valmis teksti Vipu-mobiiliin. Raportin voi tulostaa, tallentaa PDF:nä tai ladata JSONina.
+
+### HLS ja Sentinel-2: ei tunnusta
+
+Sovellus hakee NASAn HLS v2.0 -aineiston (S30 ja L30) ja ESA:n Sentinel-2 L2A -aineiston Microsoftin Planetary Computerista. Lukuoikeus (SAS-token) haetaan automaattisesti. Sentinel-2-haku on toistaiseksi vain selaimessa; skripti `hae_havainnot.py` tukee HLS:ää ja PlanetScopea.
 
 ### HLS suoraan NASAlta: Earthdata-token (vain skripti)
 
@@ -90,7 +98,7 @@ API-avain on yhtä arka kuin salasana. Älä tallenna sitä jaetulle koneelle. J
 
 ### Testaus
 
-Datahaku on testattu synteettisillä kuvilla ja mockatuilla rajapinnoilla, ei vielä oikeita palveluita vasten. Ensimmäiset oikeat haut kannattaa tarkistaa käsin.
+Datahaku on testattu synteettisillä kuvilla (Sentinel-2-kuvat: `node test/fixtures/make_s2_fixtures.js`) ja mockatuilla rajapinnoilla, ei vielä oikeita palveluita vasten. Ensimmäiset oikeat haut kannattaa tarkistaa käsin.
 
 ## Huomio
 

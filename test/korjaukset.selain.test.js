@@ -50,30 +50,47 @@ const cors = { 'Access-Control-Allow-Origin': '*' };
     return r.fulfill({ status: 404 });
   });
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html?rvproxy=off#tyokalu`);
-  await page.fill('#dStart', '2026-05-01'); await page.fill('#dEnd', '2026-09-30');
+  await page.evaluate(() => { document.getElementById('dStart').value = '2026-05-01'; document.getElementById('dEnd').value = '2026-09-30'; });
+  const measure = () => page.evaluate(() => (document.querySelector('input[name="measureR"]:checked') || {}).value || '');
+  const step = (n) => page.click(`#stepNav button[data-step="${n}"]`);
 
-  // 1) Lomakkeen järjestys: lohkon valinta ennen tunnuskenttää, raja-arvot lisäasetuksissa, PlanetScope suljettuna
-  const order = await page.evaluate(() => ['pltIn', 'lohko', 'hlsGo', 'p_ndviDrop'].map((id) => document.getElementById(id).getBoundingClientRect().top + window.scrollY));
-  assert.ok(order[0] < order[1] && order[1] < order[2], 'peruslohkotunnus ensin, sitten kasvulohkon tunnus, sitten haku');
-  assert.ok(!(await page.isVisible('#p_ndviDrop')), 'raja-arvot piilossa lisäasetuksissa');
-  assert.ok(!(await page.isVisible('#plKey')), 'PlanetScope suljettuna');
-  console.log('ok lomakkeen järjestys, lisäasetukset ja PlanetScope neuvojille');
+  // 1) Kolmivaiheinen polku: aluksi näkyy vain lohkon valinta; raja-arvot ja PlanetScope lisäasetuksissa
+  assert.ok(await page.isVisible('#pltIn'), 'lohkohaku ensimmäisenä');
+  assert.ok(await page.isVisible('#map'), 'kartta näkyy heti');
+  assert.ok(!(await page.isVisible('#step2')) && !(await page.isVisible('#step3')), 'muut vaiheet piilossa');
+  assert.ok(await page.isDisabled('#toStep2'), 'jatko vasta lohkon valinnan jälkeen');
+  assert.ok(await page.isDisabled('#stepNav button[data-step="2"]'));
+  console.log('ok vaiheet: lohko ensin, jatko vasta valinnan jälkeen');
 
   // 2) Rehuohra: toimenpide ei saa jäädä oletukseksi; vuosivaroitus
   await page.fill('#pltIn', '9750548215'); await page.click('#pltGo');
   await page.waitForFunction(() => /Valittu/.test(document.getElementById('pickMsg').textContent));
-  assert.strictEqual(await page.inputValue('#measure'), '', 'toimenpide tyhjä, koska kasvi ei ole niittovelvoitteinen');
+  assert.ok(await page.isVisible('#parcelCard'), 'valittu lohko näkyy kortissa');
+  assert.match(await page.textContent('#parcelCard'), /Rehuohra.*vuoden 2025 aineistosta/);
+  await page.click('#toStep2');
+  assert.ok(await page.isVisible('#step2') && !(await page.isVisible('#step1')));
+  assert.ok(!(await page.isVisible('#p_ndviDrop')), 'raja-arvot piilossa lisäasetuksissa');
+  assert.ok(!(await page.isVisible('#plKey')), 'PlanetScope suljettuna');
+  assert.strictEqual(await measure(), '', 'toimenpide tyhjä, koska kasvi ei ole niittovelvoitteinen');
   assert.ok(await page.isVisible('#cropWarn'));
   assert.match(await page.textContent('#cropWarnText'), /Rehuohra.*sadonkorjuuta, puintia tai tuleentumista/);
   const pm = await page.textContent('#pickMsg');
   assert.match(pm, /vuoden 2025 aineistosta, arvioitava kausi on 2026/);
   assert.match(pm, /vain yksi kasvulohko/);
+  // muu kasvi: raportti ei sovellu, hakua ei voi käynnistää
+  await page.check('input[name="measureR"][value="muu"]');
+  assert.ok(await page.isVisible('#notSuited'));
+  assert.ok(await page.isDisabled('#runGo'));
+  await page.click('#manualGo');
   await page.click('#example');
   assert.strictEqual(await page.inputValue('#out'), '', 'Vipu-tekstiä ei muodosteta ristiriidassa');
-  assert.match(await page.textContent('#verdict'), /Tarkista toimenpide/);
-  assert.match(await page.textContent('#verdict'), /vuoden 2025 aineistosta/);
+  assert.match(await page.textContent('#bigwarns'), /Tarkista toimenpide/);
+  assert.match(await page.textContent('#bigwarns'), /vuoden 2025 aineistosta/);
+  assert.match(await page.textContent('#outEmpty'), /Vahvista toimenpide vaiheessa 2/);
   // käyttäjä vahvistaa toimenpiteen
-  await page.selectOption('#measure', 'Luonnonhoitonurmi');
+  await step(2);
+  await page.check('input[name="measureR"][value="Luonnonhoitonurmi"]');
+  assert.ok(!(await page.isDisabled('#runGo')));
   assert.strictEqual(await page.inputValue('#out'), '', 'pelkkä valinta ei riitä');
   await page.check('#cropOk');
   const vipu = await page.inputValue('#out');
@@ -91,26 +108,28 @@ const cors = { 'Access-Control-Allow-Origin': '*' };
   console.log('ok huomautukset: määrä ja taivutus täsmäävät, poistot yhdellä rivillä');
 
   // 4) Lohkon vaihto tyhjentää havainnot ja tuloksen
+  await step(1);
   await page.fill('#pltIn', '1641431471-2'); await page.click('#pltGo');
   await page.waitForFunction(() => /1641431471-2/.test(document.getElementById('pickMsg').textContent));
   const rows = await page.$$eval('#obsTable tbody tr', (trs) => trs.filter((tr) => tr.querySelector('.d').value).length);
   assert.strictEqual(rows, 0, 'edellisen lohkon havainnot poistettu');
   assert.match(await page.textContent('#fetchLog'), /Lohko vaihtui: edellisen lohkon havainnot ja tulos poistettiin/);
   assert.match(await page.textContent('#verdict'), /Lisää vähintään kaksi/);
-  assert.strictEqual(await page.inputValue('#measure'), 'Luonnonhoitonurmi');
-  assert.ok(!(await page.isVisible('#cropWarn')));
+  assert.strictEqual(await measure(), 'Luonnonhoitonurmi');
+  assert.match(await page.evaluate(() => getComputedStyle(document.getElementById('cropWarn')).display), /none/);
   console.log('ok lohkon vaihto tyhjentää havainnot ja tuloksen');
 
   // 5) Tuleentumisvaroitus omana laatikkonaan
-  await page.click('#csv'.replace('#csv', 'details:has(#csv) > summary'));
+  await step(2); await page.click('#manualGo');
+  await page.click('#csvBox > summary');
   await page.fill('#csv', '2026-07-01;HLS-S30;a;0.80;100;\n2026-07-20;HLS-S30;b;0.45;100;95\n2026-07-25;HLS-S30;c;0.47;100;');
   await page.click('#importCsv');
-  assert.match(await page.textContent('#verdict'), /Hidas muutos: tarkista, että kyse on niitosta/);
+  assert.match(await page.textContent('#bigwarns'), /Hidas muutos: tarkista, että kyse on niitosta/);
   assert.ok(!(await page.$$eval('#checks > li', (ls) => ls.some((l) => /tuleentum/.test(l.textContent)))), 'ei toistu listassa');
   console.log('ok tuleentumisvaroitus erottuu');
 
   // 6) Kartta: alustus piilosta, valittu lohko näkyy, rullazoomi vasta klikkauksen jälkeen, korostus, paikkahaku
-  await page.click('#mapOpen');
+  await step(1);
   await page.waitForTimeout(400);
   const st = await page.evaluate(() => { const el = document.getElementById('map'), m = el._niittoMap, s = m.getSize(); return { w: s.x, h: s.y, cw: el.clientWidth, ch: el.clientHeight, z: m.getZoom(), c: m.getCenter() }; });
   assert.strictEqual(st.w, st.cw); assert.strictEqual(st.h, st.ch);
@@ -139,12 +158,12 @@ const cors = { 'Access-Control-Allow-Origin': '*' };
   await page.mouse.move(bb3.x + bb3.width / 2, bb3.y + bb3.height / 2);
   await page.mouse.wheel(0, 400); await page.waitForTimeout(600);
   assert.ok(await page.evaluate(() => document.getElementById('map')._niittoMap.getZoom()) < z0, 'klikkauksen jälkeen rulla zoomaa');
-  await page.fill('#placeQ', 'Seinäjoki'); await page.click('#placeGo');
+  await page.fill('#pltIn', 'Seinäjoki'); await page.click('#pltGo');
   await page.waitForSelector('#placeList:not([hidden]) button');
   await page.click('#placeList button:nth-child(1)');
   const c2 = await page.evaluate(() => document.getElementById('map')._niittoMap.getCenter());
   assert.ok(Math.abs(c2.lat - 62.7903) < 0.001 && Math.abs(c2.lng - 22.8403) < 0.001);
-  await page.fill('#placeQ', '6965000 290000'); await page.click('#placeGo'); await page.waitForTimeout(200);
+  await page.fill('#pltIn', '6965000 290000'); await page.click('#pltGo'); await page.waitForTimeout(200);
   const c3 = await page.evaluate(() => document.getElementById('map')._niittoMap.getCenter());
   assert.ok(Math.abs(c3.lat - 62.79) < 0.05, 'ETRS-TM35FIN-koordinaatit: ' + JSON.stringify(c3));
   console.log('ok kartta: koko ja kohdistus, korostus, rullazoomi, paikkahaku nimellä ja koordinaateilla');

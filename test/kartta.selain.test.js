@@ -63,7 +63,10 @@ const cors = { 'Access-Control-Allow-Origin': '*' };
   });
 
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html#tyokalu`);
-  await page.fill('#dStart', '2026-05-01');
+  await page.evaluate(() => { document.getElementById('dStart').value = '2026-05-01'; document.querySelectorAll('#step1 details, #geoBox').forEach((d) => { d.open = true; }); });
+  // Kentät, jotka ovat muissa vaiheissa piilossa, asetetaan suoraan.
+  const setVal = (sel, v) => page.evaluate(([s, x]) => { const e = document.querySelector(s); e.value = x; e.dispatchEvent(new Event('input')); }, [sel, v]);
+  const measure = () => page.evaluate(() => (document.querySelector('input[name="measureR"]:checked') || {}).value || '');
 
   // 1) Peruslohkotunnus → kaksi kasvulohkoa → valitaan luonnonhoitonurmi
   await page.fill('#pltIn', '1641431471');
@@ -72,25 +75,23 @@ const cors = { 'Access-Control-Allow-Origin': '*' };
   const opts = await page.$$eval('#pltList button', (b) => b.map((x) => x.textContent));
   assert.strictEqual(opts.length, 2);
   assert.match(opts[1], /1641431471-2 · Luonnonhoitonurmi · 3,\d\d ha/);
-  await page.click('#pltList button:nth-child(2)');
+  await page.click('#pltList button:nth-of-type(2)');
   assert.strictEqual(await page.inputValue('#lohko'), '1641431471-2');
-  assert.strictEqual(await page.inputValue('#measure'), 'Luonnonhoitonurmi');
+  assert.strictEqual(await measure(), 'Luonnonhoitonurmi');
   assert.match(await page.textContent('#geoMsg'), /3,\d\d ha · WGS84/);
   assert.match(await page.textContent('#pickMsg'), /Valittu kasvulohko 1641431471-2 · Luonnonhoitonurmi .* 2025/);
   console.log('ok peruslohkotunnus: kasvulohkon valinta, tunnus, toimenpide ja rajaus');
 
   // 2) Kartta MML-avaimella, klikkaus lohkoon
-  await page.fill('#geo', ''); await page.dispatchEvent('#geo', 'input');
-  await page.fill('#lohko', '');
-  await page.click('#mapOpen');
+  await setVal('#geo', ''); await setVal('#lohko', '');
   await page.fill('#mmlKey', 'TESTIAVAIN'); await page.dispatchEvent('#mmlKey', 'change');
-  await page.waitForFunction(() => /Kasvulohkot vuodelta 2025/.test(document.getElementById('pickMsg').textContent), null, { timeout: 10000 });
+  await page.waitForFunction(() => document.getElementById('map')._niittoMap && document.querySelectorAll('#map img').length > 0, null, { timeout: 10000 });
   const mapBox = await page.$('#map');
   // Liitetty rajaus näytetään kartalla ja kartta zoomaa siihen; sen jälkeen klikataan keskeltä
-  await page.fill('#geo', JSON.stringify(PARCELS[1])); await page.dispatchEvent('#geo', 'input');
+  await setVal('#geo', JSON.stringify(PARCELS[1]));
   await page.waitForTimeout(400);
   assert.ok(seen.mml > 0, 'MML-tiilet ladattiin');
-  await page.fill('#geo', ''); await page.dispatchEvent('#geo', 'input'); await page.fill('#lohko', '');
+  await setVal('#geo', ''); await setVal('#lohko', '');
   const bb = await mapBox.boundingBox();
   await page.mouse.click(bb.x + bb.width / 2, bb.y + bb.height / 2);
   await page.waitForFunction(() => /Valittu kasvulohko/.test(document.getElementById('pickMsg').textContent), null, { timeout: 10000 });
@@ -138,7 +139,7 @@ const cors = { 'Access-Control-Allow-Origin': '*' };
       return r.abort('accessdenied'); // vastaa CORS-estoa: fetch heittää TypeErrorin (Playwrightin fulfill ohittaisi CORSin)
     });
     await p2.goto(`http://127.0.0.1:${server.address().port}/index.html?rvproxy=off#tyokalu`);
-    await p2.fill('#dStart', '2025-05-01');
+    await p2.$eval('#dStart', (e) => { e.value = '2025-05-01'; });
     await p2.fill('#pltIn', '1641431471-2');
     await p2.click('#pltGo');
     await p2.waitForFunction(() => /Valittu|CORS/.test(document.getElementById('pickMsg').textContent), null, { timeout: 20000 });
@@ -170,7 +171,7 @@ const cors = { 'Access-Control-Allow-Origin': '*' };
       return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body), headers: { 'Access-Control-Allow-Origin': '*' } });
     });
     await p3.goto(`http://127.0.0.1:${server.address().port}/index.html?rvproxy=${encodeURIComponent(PX)}#tyokalu`);
-    await p3.fill('#dStart', '2025-05-01');
+    await p3.$eval('#dStart', (e) => { e.value = '2025-05-01'; });
     await p3.fill('#pltIn', '1641431471-2');
     await p3.click('#pltGo');
     await p3.waitForFunction(() => /Valittu|CORS|Välityspalvelin/.test(document.getElementById('pickMsg').textContent), null, { timeout: 20000 });
