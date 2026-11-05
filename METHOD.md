@@ -104,16 +104,17 @@ Sama seuranta ajetaan rinnakkain: Sentinel-2 + Sentinel-1 (perustaso, Ruokaviras
 
 ### Lähdevertailu
 
-Lähdevertailu vastaa kysymykseen, tuovatko lisälähteet paremman näkymän niittotapahtumaan. Sama tunnistus ajetaan erikseen kullekin saatavilla olevalle lähdeyhdistelmälle: Sentinel-2 L2A, HLS ilman Landsatia (S30), HLS (Sentinel-2 + Landsat), PlanetScope, Sentinel-2 + PlanetScope, HLS + PlanetScope ja HLS + PlanetScope + Sentinel-1. Kustakin raportoidaan:
+Lähdevertailu vastaa kysymykseen, tuovatko lisälähteet paremman näkymän niittotapahtumaan. Sama tunnistus ajetaan erikseen kullekin saatavilla olevalle lähdeyhdistelmälle: Sentinel-2 L2A, HLS ilman Landsatia (S30), HLS (Sentinel-2 + Landsat), PlanetScope, Sentinel-2 + PlanetScope, HLS + PlanetScope sekä tutkan kanssa pelkkä Sentinel-1, Sentinel-2 + Sentinel-1 (Ruokaviraston aineisto), HLS + Sentinel-1, PlanetScope + Sentinel-1 ja HLS + PlanetScope + Sentinel-1. Tutkarivit näytetään, kun Sentinel-1-havaintoja (VH-takaisinsironta tai koherenssi) on haettu tai tuotu. Kustakin raportoidaan:
 
 | Mittari | Merkitys |
 | --- | --- |
 | Kelvollisia päiviä | päivät, joilta lohkosta saatiin vähintään rajan verran pilvettömiä pikseleitä |
+| Tutkakuvauksia | Sentinel-1-havaintojen määrä (vain tutkarivit) |
 | Kuvaväli (mediaani, pisin) | kelvollisten päivien väli; pitkä väli peittää niittoja ja hidastaa muutoksen havaitsemista |
 | Niittoväli | viimeisen niittoa edeltävän ja ensimmäisen niiton jälkeisen kelvollisen kuvan väli (vrk): niiton ajoituksen epävarmuus |
-| Luottamus | parhaan hyväksytyn tapahtuman luottamus |
+| Luottamus | parhaan hyväksytyn tapahtuman luottamus; pelkälle Sentinel-1:lle vahvimman (hylätyn) muutoksen luottamus harmaalla. Merkintä *tutka tukee*: Sentinel-1 on mukana hyväksytyssä tapahtumassa. |
 
-Perustaso on pelkkä Sentinel-2, koska se vastaa Ruokaviraston seurannan optista aineistoa (puuttuessa HLS S30). Lisälähteiden katsotaan parantaneen havaintoa, jos niitto tunnistetaan vain lisälähteillä, jos niittoväli lyhenee vähintään 2 vrk tai jos luottamus nousee yli 0,05. Yhden lohkon vertailu kuvaa vain sitä lohkoa ja kautta. Yleisen johtopäätöksen tekeminen vaatii vertailun useilla lohkoilla ja maastossa todetuilla niittopäivillä.
+Perustaso on pelkkä Sentinel-2, koska se vastaa Ruokaviraston seurannan optista aineistoa (puuttuessa HLS S30). Lisälähteiden katsotaan parantaneen havaintoa, jos niitto tunnistetaan vain lisälähteillä, jos niittoväli lyhenee vähintään 2 vrk tai jos luottamus nousee yli 0,05. Sentinel-1:n osuus raportoidaan erikseen vertaamalla kutakin optista lähdettä sen tutkalla täydennettyyn versioon: nostiko tutka heikon signaalin tunnistetuksi, kavensiko se niittoväliä tai nostiko luottamusta. Pelkkä Sentinel-1 ei voi yksin ylittää tunnistusrajaa (luottamus enintään 0,45 < 0,6). Niittoväli on vähintään 1 vrk. Yhden lohkon vertailu kuvaa vain sitä lohkoa ja kautta. Yleisen johtopäätöksen tekeminen vaatii vertailun useilla lohkoilla ja maastossa todetuilla niittopäivillä.
 
 ### Näytön taso
 

@@ -277,17 +277,18 @@
   // ---------- Lähdevertailu ----------
   var cmpCache=null;
   function renderCompare(obs,p){
-    var fams={}; obs.forEach(function(o){var f=C.FAMILY[o.src]; if(f&&f!=='S1') fams[f]=1});
+    // tutka (koherenssi ja VH) lasketaan yhdeksi lähteeksi
+    var fams={}; obs.forEach(function(o){var f=C.FAMILY[o.src]; if(f) fams[C.isRadar(f)?'S1':f]=1});
     var box=$('compare');
     if(Object.keys(fams).length<2){box.hidden=true;cmpCache=null;return}
     var r=C.compareSources(obs,p); box.hidden=false;
     var det=r.rows.filter(function(x){return x.detected}), bestW=det.length?Math.min.apply(null,det.map(function(x){return x.windowDays})):null;
-    var head='<thead><tr><th>Lähteet</th><th>Kelvollisia päiviä</th><th>Kuvaväli, mediaani</th><th>Pisin väli</th><th>Niitto</th><th>Niittoväli</th><th>Luottamus</th></tr></thead>';
+    var head='<thead><tr><th>Lähteet</th><th>Kelvollisia päiviä</th><th>Tutkakuvauksia</th><th>Kuvaväli, mediaani</th><th>Pisin väli</th><th>Niitto</th><th>Niittoväli</th><th>Luottamus</th></tr></thead>';
     var body=r.rows.map(function(x){
-      return '<tr><td>'+esc(x.label)+'</td><td class="num">'+x.nObs+'</td><td class="num">'+(x.gapMedian==null?'–':Math.round(x.gapMedian)+' vrk')+'</td><td class="num">'+(x.gapMax==null?'–':Math.round(x.gapMax)+' vrk')+'</td>'+
-        '<td>'+(x.detected?'tunnistettu':'<span class="muted">ei</span>')+'</td>'+
-        '<td class="num'+(x.detected&&x.windowDays===bestW?' best':'')+'">'+(x.detected?fiShort(x.start)+'–'+fiShort(x.end)+' ('+Math.round(x.windowDays)+' vrk)':'–')+'</td>'+
-        '<td class="num">'+(x.conf==null?'–':fx(x.conf,2))+'</td></tr>';
+      return '<tr'+(x.radar?' class="radar"':'')+'><td>'+esc(x.label)+'</td><td class="num">'+x.nObs+'</td><td class="num">'+(x.radar?x.nRadar:'–')+'</td><td class="num">'+(x.gapMedian==null?'–':Math.round(x.gapMedian)+' vrk')+'</td><td class="num">'+(x.gapMax==null?'–':Math.round(x.gapMax)+' vrk')+'</td>'+
+        '<td>'+(x.detected?'tunnistettu'+(x.radarSupport?' <span class="small muted">(tutka tukee)</span>':''):x.key==='S1'&&x.maxConf!=null?'<span class="muted">heikko muutos</span>':'<span class="muted">ei</span>')+'</td>'+
+        '<td class="num'+(x.detected&&x.windowDays===bestW?' best':'')+'">'+(x.detected?(x.start===x.end?fiShort(x.start):fiShort(x.start)+'–'+fiShort(x.end))+' ('+Math.round(x.windowDays)+' vrk)':'–')+'</td>'+
+        '<td class="num">'+(x.conf!=null?fx(x.conf,2):x.maxConf!=null?'<span class="muted">'+fx(x.maxConf,2)+'</span>':'–')+'</td></tr>';
     }).join('');
     $('cmpTable').innerHTML=head+'<tbody>'+body+'</tbody>';
     var s=r.summary, cls=s&&s.verdict==='better'?'better':'';

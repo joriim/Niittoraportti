@@ -362,3 +362,23 @@ t('Sentinel-1: eri radat verrataan erikseen', () => {
   assert.strictEqual(mixed.acc.length, 0, 'ilman rataerottelua ratojen tasoero peittää niiton');
 });
 console.log('tutkatestit läpi');
+
+// ---------- Lähdevertailu: Sentinel-1 ----------
+t('lähdevertailu: Sentinel-1 omana rivinä ja optisten lähteiden täydentäjänä', () => {
+  const ps = s2mow.map((o) => Object.assign({}, o, { src: 'PlanetScope', id: 'PS ' + o.id }));
+  const r = C.compareSources(s2mow.concat(s1vh, ps), { measure: 'Luonnonhoitonurmi' });
+  const keys = r.rows.map((x) => x.key);
+  assert.deepStrictEqual(keys, ['S2', 'PS', 'S2+PS', 'S1', 'S2+S1', 'PS+S1']);
+  const s1 = r.rows.find((x) => x.key === 'S1'), s2s1 = r.rows.find((x) => x.key === 'S2+S1'), s2 = r.rows.find((x) => x.key === 'S2');
+  assert.strictEqual(s1.detected, false, 'tutka yksin ei riitä');
+  assert.strictEqual(s1.nObs, 0); assert.strictEqual(s1.nRadar, 14);
+  assert.ok(s1.maxConf > 0 && s1.maxConf <= 0.45);
+  assert.ok(s2s1.detected && s2s1.radarSupport);
+  assert.ok(s2s1.windowDays < s2.windowDays, 'tutka kaventaa niittoväliä');
+  assert.ok(r.summary.text.some((x) => /Sentinel-1 kavensi Sentinel-2 L2A:n niittoväliä 4 vrk → 3 vrk/.test(x)), r.summary.text.join(' | '));
+  assert.ok(r.summary.text.some((x) => /^Pelkkä Sentinel-1 \(14 kuvausta\): muutos näkyi/.test(x)));
+  assert.ok(!r.summary.text.some((x) => /^Pelkkä Sentinel-1 ei tunnistanut/.test(x)));
+  // ilman tutkaa S1-rivejä ei ole
+  assert.ok(!C.compareSources(s2mow.concat(ps), {}).rows.some((x) => x.radar));
+});
+console.log('lähdevertailun tutkatestit läpi');

@@ -185,6 +185,10 @@ const item = (id, c, d, p, nir, e) => ({ id, collection: c, properties: { dateti
   assert.match(await page.textContent('#fetchLog'), /20 tutkakuvausta 2 radalta \(ASC klo 16:05: 10, DESC rata 22: 10\)/);
   assert.ok(await page.$('#rvTimeline .tline i'), 'aikajana');
   assert.match(await page.textContent('#chart'), /VH dB/);
+  const cmpRows = await page.$$eval('#cmpTable tbody tr td:first-child', (td) => td.map((x) => x.textContent));
+  for (const k of ['Pelkkä Sentinel-1', 'Sentinel-2 + Sentinel-1 (Ruokaviraston aineisto)', 'HLS + Sentinel-1', 'PlanetScope + Sentinel-1']) assert.ok(cmpRows.includes(k), k);
+  assert.match(await page.textContent('#cmpSummary'), /Pelkkä Sentinel-1 \(20 kuvausta\)/);
+  await (await page.$('#compare')).screenshot({ path: path.join(process.env.SHOT_DIR || require('os').tmpdir(), 'vertailu_s1.png') });
   const rep2 = await page.evaluate(() => { let o = null; const real = URL.createObjectURL; URL.createObjectURL = (b) => { o = b; return real.call(URL, b); }; document.getElementById('dlJson').click(); URL.createObjectURL = real; return o && o.text(); });
   assert.ok(!/salainen/.test(rep2), 'tunnus ei päädy raporttiin');
   assert.strictEqual(JSON.parse(rep2).seuranta.perustaso, 'RV');

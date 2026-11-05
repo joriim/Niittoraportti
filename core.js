@@ -436,8 +436,13 @@
     { key: 'PS', label: 'PlanetScope', srcs: ['PlanetScope'] },
     { key: 'S2+PS', label: 'Sentinel-2 + PlanetScope', srcs: ['Sentinel-2', 'PlanetScope'] },
     { key: 'HLS+PS', label: 'HLS + PlanetScope', srcs: ['HLS-S30', 'HLS-L30', 'PlanetScope'] },
+    { key: 'S1', label: 'Pelkkä Sentinel-1', srcs: ['Sentinel-1 koherenssi', 'Sentinel-1 VH'] },
+    { key: 'S2+S1', label: 'Sentinel-2 + Sentinel-1 (Ruokaviraston aineisto)', srcs: ['Sentinel-2', 'Sentinel-1 koherenssi', 'Sentinel-1 VH'] },
+    { key: 'HLS+S1', label: 'HLS + Sentinel-1', srcs: ['HLS-S30', 'HLS-L30', 'Sentinel-1 koherenssi', 'Sentinel-1 VH'] },
+    { key: 'PS+S1', label: 'PlanetScope + Sentinel-1', srcs: ['PlanetScope', 'Sentinel-1 koherenssi', 'Sentinel-1 VH'] },
     { key: 'ALL', label: 'HLS + PlanetScope + Sentinel-1', srcs: ['HLS-S30', 'HLS-L30', 'PlanetScope', 'Sentinel-1 koherenssi', 'Sentinel-1 VH'] }
   ];
+  var RADAR_SRC = { 'Sentinel-1 koherenssi': true, 'Sentinel-1 VH': true };
   function gapStats(dates) {
     var u = dates.filter(function (d, i) { return dates.indexOf(d) === i; }).sort(), g = [];
     for (var i = 1; i < u.length; i++) g.push(days(u[i - 1], u[i]));
@@ -455,17 +460,21 @@
     SCENARIOS.forEach(function (sc) {
       var fams = {}; sc.srcs.forEach(function (s) { fams[FAMILY[s]] = true; });
       // jokaisen perheen on oltava mukana, ja HLS vaatii vähintään yhden HLS-lähteen
+      // optisten perheiden on oltava mukana; tutkaa sisältävä vaihtoehto vaatii tutkahavaintoja
+      var hasRadar = famsPresent.S1 || famsPresent.S1B, radarSc = sc.srcs.some(function (s) { return RADAR_SRC[s]; });
       if (!Object.keys(fams).every(function (f) { return isRadar(f) || famsPresent[f]; })) return;
+      if (radarSc && !hasRadar) return;
       if ((sc.needs || []).some(function (s) { return !present[s]; })) return;
-      if (sc.key === 'ALL' && (!famsPresent.PS || !(famsPresent.S1 || famsPresent.S1B))) return;
+      if (sc.key === 'ALL' && !famsPresent.PS) return;
       var sub = obs.filter(function (o) { return o && sc.srcs.indexOf(o.src) >= 0; });
       var res = analyze(sub, p);
-      var opt = res.used.filter(function (o) { return !isRadar(o.fam); });
+      var opt = res.used.filter(function (o) { return !isRadar(o.fam); }), rad = res.used.filter(function (o) { return isRadar(o.fam); });
       var g = gapStats(opt.map(function (o) { return o.date; }));
-      var b = res.best;
-      rows.push({ key: sc.key, label: sc.label, fams: Object.keys(fams).length, nObs: g.n, excluded: res.excluded.length,
+      var b = res.best, top = b || res.events.slice().sort(function (x, y) { return y.conf - x.conf; })[0] || null;
+      rows.push({ key: sc.key, label: sc.label, fams: Object.keys(fams).length, nObs: g.n, nRadar: rad.length, radar: radarSc, excluded: res.excluded.length,
+        radarSupport: !!(b && b.fams.some(isRadar)), maxConf: top ? round(top.conf, 2) : null,
         gapMedian: g.median, gapMax: g.max, detected: !!b, start: b ? b.start : null, end: b ? b.end : null,
-        windowDays: b ? days(b.start, b.end) : null, conf: b ? b.conf : null, level: res.verdict.level, label2: res.verdict.label });
+        windowDays: b ? Math.max(1, days(b.start, b.end)) : null /* sama päivä = 1 vrk */, conf: b ? b.conf : null, level: res.verdict.level, label2: res.verdict.label });
     });
     return { rows: rows, summary: compareSummary(rows) };
   }
@@ -474,7 +483,7 @@
   function compareSummary(rows) {
     if (rows.length < 2) return null;
     var base = rows.filter(function (r) { return r.key === 'S2'; })[0] || rows.filter(function (r) { return r.key === 'HLS-S30'; })[0] || rows[0];
-    var others = rows.filter(function (r) { return r !== base && !(base.key === 'S2' && r.key === 'HLS-S30'); });
+    var others = rows.filter(function (r) { return r !== base && !(base.key === 'S2' && r.key === 'HLS-S30') && r.key !== 'S1'; });
     var fiD = function (n) { return Math.round(n) + ' vrk'; }, c2 = function (x) { return x.toFixed(2).replace('.', ','); };
     var out = [];
     out.push(base.label + (base.detected ? ': niittoväli ' + fi(base.start) + '–' + fi(base.end) + ' (' + fiD(base.windowDays) + '), luottamus ' + c2(base.conf) + '.' : ' yksinään ei tunnistanut niittoa.'));
@@ -492,7 +501,20 @@
       else if (best.conf > base.conf + 0.05) { verdict = 'better'; out.push('Lisälähteet eivät kaventaneet niittoväliä, mutta nostivat luottamusta ' + c2(base.conf) + ' → ' + c2(best.conf) + ' (' + best.label + ').'); }
       else out.push('Lisälähteet eivät kaventaneet niittoväliä eivätkä nostaneet luottamusta.');
     }
-    others.filter(function (r) { return !r.detected && base.detected; }).forEach(function (r) { out.push(r.label + ' ei tunnistanut niittoa.'); });
+    others.filter(function (r) { return !r.detected && base.detected && r.key !== 'S1'; }).forEach(function (r) { out.push(r.label + ' ei tunnistanut niittoa.'); });
+    // Sentinel-1:n osuus: vertaa optista lähdettä sen tutkalla täydennettyyn versioon
+    [['S2', 'S2+S1'], ['HLS', 'HLS+S1'], ['PS', 'PS+S1']].forEach(function (pr) {
+      var a = rows.filter(function (r) { return r.key === pr[0]; })[0], b = rows.filter(function (r) { return r.key === pr[1]; })[0];
+      if (!a || !b) return;
+      var t;
+      if (!a.detected && b.detected) t = 'Sentinel-1 nosti ' + a.label + ':n heikon signaalin tunnistetuksi niitoksi (' + fi(b.start) + '–' + fi(b.end) + ').';
+      else if (a.detected && b.detected && a.windowDays - b.windowDays >= 1) t = 'Sentinel-1 kavensi ' + a.label + ':n niittoväliä ' + fiD(a.windowDays) + ' → ' + fiD(b.windowDays) + '.';
+      else if (a.detected && b.detected && b.conf > a.conf + 0.01) t = 'Sentinel-1 tuki ' + a.label + ':n niittoa (luottamus ' + c2(a.conf) + ' → ' + c2(b.conf) + ').';
+      else if (a.detected && b.detected) t = 'Sentinel-1 ei muuttanut ' + a.label + ':n tulosta (tutkassa ei samanaikaista muutosta).';
+      if (t) out.push(t);
+    });
+    var s1 = rows.filter(function (r) { return r.key === 'S1'; })[0];
+    if (s1) out.push('Pelkkä Sentinel-1 (' + s1.nRadar + ' kuvausta): ' + (s1.maxConf != null ? 'muutos näkyi luottamuksella ' + c2(s1.maxConf) + ', mutta' : 'ei niiton kaltaista muutosta, ja') + ' tutka ei yksin riitä niiton toteamiseen (luottamus enintään 0,45 < ' + String(DEFAULTS.confMin).replace('.', ',') + ').');
     return { verdict: verdict, base: base.key, best: best ? best.key : null, text: out };
   }
 
