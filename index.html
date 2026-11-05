@@ -237,6 +237,26 @@ details.adv{margin-top:16px}
   .split.s3{grid-template-columns:1fr}
   .card{border-color:#999}
 }
+/* ---- Kehitys: tulosjärjestys, viranomaisseurannan tiivistelmä, mobiilin alapalkki ---- */
+.rvmini{display:flex;gap:12px;align-items:flex-start;margin-top:14px;padding:12px 14px;border-radius:10px;border:1px solid var(--line);font-size:15px}
+.rvmini .ldot{width:14px;height:14px;margin:3px 0 0;flex:none}
+.rvmini .small{margin-top:2px;line-height:1.45}
+.advres{margin-top:16px}
+.advres>.body{padding:0 12px 12px}
+.advres .card{margin:12px 0 0}
+.tline{background:rgba(127,127,127,.18)}
+#chart{width:100%;height:auto;display:block}
+.mobbar{position:fixed;left:0;right:0;bottom:0;z-index:50;padding:10px 16px calc(12px + env(safe-area-inset-bottom));background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -6px 18px rgba(0,0,0,.10)}
+.mobbar .btn{width:100%}
+@media(min-width:900px){.mobbar{display:none!important}}
+@media(max-width:899px){
+  body.has-mobbar{padding-bottom:92px}
+  .split.s3{display:flex;flex-direction:column;gap:16px}
+  .split.s3>.col-form,.split.s3>.col-side{display:contents}
+  .split.s3 .card{margin:0}
+  #resCard{order:1} .split.s3 .vipu{order:2} #chartCard{order:3} #disc{order:4;margin:0!important} #advRes{order:5;margin:0} #tech{order:6;margin:0} #s3actions{order:7}
+}
+@media print{.mobbar,.rvmini a{display:none!important}#advRes{display:block}}
 </style>
 </head>
 <body data-tab="tyokalu">
@@ -548,7 +568,7 @@ details.adv{margin-top:16px}
     </div>
     <div class="split s3">
       <div class="col-form">
-        <section class="card result" aria-live="polite" aria-labelledby="resHead">
+        <section class="card result" id="resCard" aria-live="polite" aria-labelledby="resHead">
           <div class="reshead">
             <p class="small muted" id="resMeta" style="margin:0"></p>
             <div id="meter" class="meter" role="img" aria-label="Näytön vahvuus"><i></i><i></i><i></i><span></span></div>
@@ -556,15 +576,19 @@ details.adv{margin-top:16px}
           <h3 id="resHead" class="sr">Tulos</h3>
           <div id="verdict" class="muted">Lisää vähintään kaksi saman lähteen havaintoa.</div>
           <dl id="facts" class="facts"></dl>
+          <div id="rvMini" class="rvmini" hidden></div>
           <div id="bigwarns"></div>
         </section>
 
-        <section class="card result" aria-labelledby="chartHead">
+        <section class="card result" id="chartCard" aria-labelledby="chartHead">
           <h3 id="chartHead" style="margin-top:0">Kasvuston vihreys</h3>
           <svg id="chart" viewBox="0 0 720 280" role="img" aria-label="Havaintojen aikasarja"></svg>
           <div class="legend" id="legend"></div>
         </section>
 
+        <details class="adv advres" id="advRes" hidden>
+          <summary><span class="ttl">Seuranta ja lähdevertailu</span><span class="muted small" id="advResSum">neuvojille: lähteittäin laskettu tulos</span></summary>
+          <div class="body">
         <section class="card result" id="rvCard" hidden aria-labelledby="rvHead">
           <h3 id="rvHead" style="margin-top:0">Ruokaviraston kaltainen seuranta</h3>
           <p class="small muted" style="margin-top:0">NDVI:n pudotus suhteessa trendiin (trendi ± 2σ), Sentinel-1-tutka tukena, tulos päivittäin, liikennevalo ja luotettavuustaso. Sama laskenta HLS:lle ja PlanetScopelle rinnalla. Ruokaviraston koneoppimismallia ei ole julkaistu, joten luokittelu tehdään avoimilla säännöillä.</p>
@@ -581,6 +605,8 @@ details.adv{margin-top:16px}
           <p class="small muted" style="margin:10px 0 0">Niittoväli on viimeisen niittoa edeltävän ja ensimmäisen niiton jälkeisen kelvollisen kuvan väli: mitä lyhyempi, sitä tarkemmin niitto on ajoitettu. Kelvollinen päivä = lohkosta vähintään raja-arvon verran pilvettömiä pikseleitä. Kun mukana on HLS, pääarvio käyttää sitä, koska Sentinel-2 L2A sisältää samat kuvat.</p>
         </section>
 
+          </div>
+        </details>
         <details class="adv" id="tech">
           <summary><span class="ttl">Tekniset tiedot</span><span class="muted small" id="techSum">tarkistukset, tapahtumat ja havaintotaulukko</span></summary>
           <div class="body">
@@ -636,14 +662,16 @@ details.adv{margin-top:16px}
             <button class="btn" id="dlJson" type="button">Lataa raportti (JSON)</button>
           </div>
         </section>
-        <p class="callout small" style="margin:12px 0">Raportti on lisäselvitys. Käsittelijä päättää, huomioidaanko se, eikä se nykyisellään korvaa Vipu-mobiilin kuvaa. Raja-arvoja ei ole kalibroitu Suomen maastoaineistolla.</p>
-        <div class="actions">
+        <p class="callout small" id="disc" style="margin:12px 0">Raportti on lisäselvitys. Käsittelijä päättää, huomioidaanko se, eikä se nykyisellään korvaa Vipu-mobiilin kuvaa. Raja-arvoja ei ole kalibroitu Suomen maastoaineistolla.</p>
+        <div class="actions" id="s3actions">
           <button class="btn" id="back2" type="button">← Muuta tietoja</button>
           <button class="btn" id="newField" type="button">Tarkista toinen lohko</button>
         </div>
       </aside>
     </div>
   </div>
+
+  <div id="mobBar" class="mobbar" hidden><button type="button" class="btn primary big" id="mobGo"></button></div>
 
   <details class="adv" id="tunnukset" style="margin-top:24px"><summary><span class="ttl">Tunnukset ja ohjeet</span><span class="muted small">HLS ja Sentinel-2 ilman tunnusta, Copernicus (Sentinel-1), NASA Earthdata ja Planet-API-avain</span></summary>
     <div class="body">

@@ -23,6 +23,7 @@
     tabs.forEach(function(b){var on=b.dataset.tab===id;b.setAttribute('aria-selected',on?'true':'false');b.tabIndex=on?0:-1;if(on&&focus)b.focus()});
     document.querySelectorAll('section.panel').forEach(function(s){s.classList.toggle('active',s.id===id)});
     document.body.setAttribute('data-tab',id);
+    if(typeof updateMobBar==='function'&&mobMQ) updateMobBar();
     if(history.replaceState) history.replaceState(null,'','#'+id);
     if(id==='tyokalu'&&step===1) ensureMap();
   }
@@ -46,6 +47,7 @@
       b.disabled=i>maxStep||(i>1&&!fieldState); b.classList.toggle('done',i<n);
     });
     if(n===1) ensureMap();
+    updateMobBar();
     if(!noScroll){var top=$('tyokalu').getBoundingClientRect().top+window.scrollY-60; if(window.scrollY>top) window.scrollTo(0,Math.max(0,top))}
   }
   stepBtns.forEach(function(b){b.addEventListener('click',function(){if(!b.disabled) goStep(+b.dataset.step)})});
@@ -71,7 +73,7 @@
     isMuu:function(){return mRadios.some(function(r){return r.checked&&r.value===MUU})}
   };
   measureSel.value='Luonnonhoitonurmi';
-  measureBox.addEventListener('change',function(){$('cropOk').checked=false;render()});
+  measureBox.addEventListener('change',function(){$('cropOk').checked=false;render();updateMobBar()});
 
   var parcelInfo={kasvi:null,vuosi:null,lahde:null}, fieldKey=null, lastParcel=null;
   $('srcList').textContent=C.SOURCES.join(', ');
@@ -150,12 +152,13 @@
     updateCode(obs);
     renderCompare(obsAll,p);
     renderMonitor(obsAll,p);
+    updateAdvRes();
     var v=$('verdict'), ck=$('checks'), ev=$('events'), facts=$('facts'), bwEl=$('bigwarns'), meter=$('meter');
     var out=$('out'), svg=$('chart');
     if(obs.filter(function(o){return o.value!=null&&!isNaN(o.value)}).length<2){
       v.className='muted';v.textContent='Lisää vähintään kaksi saman lähteen havaintoa.';
       ck.innerHTML='';ev.innerHTML='';facts.innerHTML='';bwEl.innerHTML='';out.value='';svg.innerHTML='';$('legend').innerHTML='';
-      setMeter(null);current=null;$('techSum').textContent='tarkistukset, tapahtumat ja havaintotaulukko';
+      setMeter(null);renderRvMini(null);current=null;$('techSum').textContent='tarkistukset, tapahtumat ja havaintotaulukko';
       $('outEmpty').textContent='Teksti muodostuu, kun havainnot on haettu.';setLen();return;
     }
     var res=C.analyze(obs,p);
@@ -171,6 +174,7 @@
     v.innerHTML='<div class="verdict v-'+vd.level+'">'+esc(vd.label)+'</div><div class="vdetail">'+
       (b?'Satelliittikuvissa kasvusto väheni '+C.fi(b.start)+'–'+C.fi(b.end)+' ('+b.fams.map(function(f){return NAME[f]}).join(' + ')+'). ':'')+esc(vd.detail)+'.</div>';
     setMeter(vd.level);
+    renderRvMini(vd);
     var checks=b?b.checks:[], slow=checks.filter(function(c){return /tuleentum/.test(c.t)&&c.s==='warn'});
     // Avainluvut
     var f='';
@@ -216,6 +220,32 @@
     setLen();
     drawChart(svg,res,null);
   }
+  // Tiivistelmä: näkeekö Ruokaviraston kaltainen seuranta (pelkät Sentinel-kuvat) niiton, ja miten se suhteutuu tähän raporttiin.
+  var LIGHT_FI={green:'vihreä',yellow:'keltainen',red:'punainen'};
+  function renderRvMini(vd){
+    var el=$('rvMini'), mc=monCache;
+    if(!mc||!vd){el.hidden=true;el.innerHTML='';return}
+    var green=mc.liikennevalo==='green', ok=vd.level==='strong'||vd.level==='moderate', why;
+    if(green&&ok) why='Pelkät Sentinel-kuvat näyttävät todennäköisesti niiton myös Ruokaviraston seurannassa.';
+    else if(!green&&ok) why='Pelkkiin Sentinel-kuviin perustuva seuranta ei välttämättä näe niittoa. Siksi selvityspyyntö on mahdollinen, ja tämä raportti on lisäselvitys sitä varten.';
+    else if(green&&!ok) why='Seuranta näkee muutoksen, vaikka tämän raportin näyttö jää heikoksi. Tarkista tarkemmat tiedot.';
+    else why='Kumpikaan ei näe niittoa selvästi. Ota lohkolta kuva Vipu-mobiililla.';
+    el.innerHTML='<span class="ldot lt-'+mc.liikennevalo+'" aria-hidden="true"></span><div><strong>Ruokaviraston kaltainen seuranta: '+esc(mc.tulos)+'</strong>'+
+      '<span class="muted"> · '+esc(LIGHT_FI[mc.liikennevalo]||mc.liikennevalo)+', luotettavuus '+esc(String(mc.luotettavuus).toLowerCase())+'</span>'+
+      '<div class="small muted">'+esc(why)+' <a href="#advRes" id="rvMore">Katso seuranta</a></div></div>';
+    el.hidden=false;
+  }
+  document.addEventListener('click',function(e){
+    if(e.target&&e.target.id==='rvMore'){e.preventDefault();var d=$('advRes');d.open=true;d.scrollIntoView({behavior:'smooth',block:'start'})}
+  });
+  function updateAdvRes(){
+    var rv=!$('rvCard').hidden, cp=!$('compare').hidden, box=$('advRes');
+    box.hidden=!rv&&!cp;
+    var parts=[];
+    if(rv&&monCache) parts.push('seuranta: '+(LIGHT_FI[monCache.liikennevalo]||'')+', '+String(monCache.luotettavuus).toLowerCase()+' luotettavuus');
+    if(cp&&cmpCache) parts.push('lähdevertailu: '+(cmpCache.johtopaatos==='better'?'lisälähteet tarkensivat':cmpCache.johtopaatos==='same'?'ei eroa':'ei ratkennut'));
+    $('advResSum').textContent=parts.join(' · ')||'neuvojille: lähteittäin laskettu tulos';
+  }
   function setMeter(level){
     var n={strong:3,moderate:2,weak:1,fail:1,none:0}[level]||0, L={strong:'Vahva',moderate:'Kohtalainen',weak:'Heikko',fail:'Ehto ei täyty',none:'Ei näyttöä'};
     var m=$('meter'); m.className='meter'+(level?' lv-'+level:'');
@@ -226,7 +256,23 @@
   }
   function slimEv(e){return {alku:e.start,loppu:e.end,luottamus:e.conf,hyvaksytty:e.accepted,lahteet:e.fams,tarkistukset:e.checks,
     tunnistukset:e.dets.map(function(d){return {lahde:d.fam,alku:d.start,loppu:d.end,ennen:{paiva:d.before.date,tunniste:d.before.id,arvo:d.before.value},jalkeen:{paiva:d.after.date,tunniste:d.after.id,arvo:d.after.value},pudotus:d.drop,z:d.z,pysyvyys:d.persistence,muuttunut:d.changed,luottamus:Math.round(d.conf*100)/100}})}}
-  function setLen(){var o=$('out');$('outLen').textContent=o.value?'('+o.value.length+' merkkiä)':'';$('copy').disabled=!o.value;$('dlJson').disabled=!current;$('printBtn').disabled=!current}
+  function setLen(){var o=$('out');$('outLen').textContent=o.value?'('+o.value.length+' merkkiä)':'';$('copy').disabled=!o.value;$('dlJson').disabled=!current;$('printBtn').disabled=!current;updateMobBar()}
+
+  // ---------- Mobiilin alapalkki: vaiheen pääpainike aina peukalon ulottuvilla ----------
+  var mobAct=null, mobMQ=window.matchMedia?matchMedia('(max-width: 899px)'):{matches:false};
+  function updateMobBar(){
+    var bar=$('mobBar'), b=$('mobGo'), txt='', dis=false; mobAct=null;
+    if(document.body.getAttribute('data-tab')==='tyokalu'){
+      if(step===1&&fieldState){var tn=$('lohko').value.trim(); txt='Jatka'+(tn?': '+tn:'')+' →'; mobAct=function(){goStep(2)}}
+      else if(step===2){txt=busy?'Haetaan kuvia…':'Hae kuvat ja laske tulos →'; dis=busy||measureSel.isMuu(); mobAct=function(){$('runGo').click()}}
+      else if(step===3&&$('out').value){txt='Kopioi teksti Vipuun'; mobAct=function(){$('copy').click(); b.textContent='Kopioitu ✓'; setTimeout(updateMobBar,1500)}}
+    }
+    bar.hidden=!txt; b.textContent=txt; b.disabled=dis;
+    document.body.classList.toggle('has-mobbar',!!txt&&mobMQ.matches);
+  }
+  $('mobGo').addEventListener('click',function(){if(mobAct) mobAct()});
+  if(mobMQ.addEventListener) mobMQ.addEventListener('change',updateMobBar);
+  var rsT=null; window.addEventListener('resize',function(){clearTimeout(rsT);rsT=setTimeout(function(){if(step===3) render()},200)});
 
   // ---------- Lähdevertailu ----------
   var cmpCache=null;
@@ -267,9 +313,9 @@
     // aikajana
     var segs=m.daily, tl='';
     if(segs.length){
-      var t0=Date.parse(segs[0].from), t1=Date.parse(segs[segs.length-1].to)+864e5, SC={seurannassa:'var(--line)',katve:'var(--warn)',niitto:'var(--accent)',niitetty:'var(--accent-soft, #cfe8d4)'};
+      var t0=Date.parse(segs[0].from), t1=Date.parse(segs[segs.length-1].to)+864e5, SC={seurannassa:'rgba(127,127,127,.35)',katve:'var(--warn)',niitto:'var(--accent)',niitetty:'var(--accent-soft, #cfe8d4)'};
       tl='<div class="tline" role="img" aria-label="Päivittäinen tila">'+segs.map(function(g){var w=(Date.parse(g.to)+864e5-Date.parse(g.from))/(t1-t0)*100;return '<i style="width:'+w.toFixed(2)+'%;background:'+SC[g.state]+'" title="'+fiShort(g.from)+'–'+fiShort(g.to)+' '+g.state+'"></i>'}).join('')+'</div>'+
-        '<div class="legend small"><span><i style="background:var(--line)"></i>seurannassa</span><span><i style="background:var(--warn)"></i>katve (yli '+C.DEFAULTS.warnGap+' vrk ilman selkeää kuvaa)</span><span><i style="background:var(--accent)"></i>niitto</span><span><i style="background:var(--accent-soft, #cfe8d4)"></i>niitetty</span></div>';
+        '<div class="legend small"><span><i style="background:rgba(127,127,127,.35)"></i>seurannassa</span><span><i style="background:var(--warn)"></i>katve (yli '+C.DEFAULTS.warnGap+' vrk ilman selkeää kuvaa)</span><span><i style="background:var(--accent)"></i>niitto</span><span><i style="background:var(--accent-soft, #cfe8d4)"></i>niitetty</span></div>';
     }
     $('rvTimeline').innerHTML=tl;
     var head='<thead><tr><th>Lähteet</th><th>Tulos</th><th>Luotettavuus</th><th>Niittoväli</th><th>Vihreä alkaen</th><th>Katvetta</th><th>Kuvia (opt./tutka)</th></tr></thead>';
@@ -283,8 +329,13 @@
   }
 
   function drawChart(svg,res,allUsed){
-    var W=720,H=280,L=48,R=48,T=28,B=40, used=allUsed||res.used;
+    var used=allUsed||res.used;
     if(!used.length){svg.innerHTML='';return}
+    // Kapealla näytöllä pienempi koordinaatisto, jotta tekstit pysyvät luettavina.
+    var right=used.some(function(o){return o.fam==='S1'||o.fam==='S1B'});
+    var narrow=(svg.getBoundingClientRect().width||720)<520, FS=narrow?12:13;
+    var W=narrow?420:720,H=narrow?250:280,L=narrow?38:48,R=right?(narrow?40:48):(narrow?12:24),T=28,B=40;
+    svg.setAttribute('viewBox','0 0 '+W+' '+H);
     var t=function(d){return Date.parse(d)/864e5};
     var ds=used.map(function(o){return o.date}).sort(), x0=t(ds[0]),x1=t(ds[ds.length-1]); if(x1===x0)x1=x0+1;
     var X=function(d){return L+(t(d)-x0)/(x1-x0)*(W-L-R)}, Y=function(v){return T+(1-Math.max(0,Math.min(1,v)))*(H-T-B)};
@@ -292,7 +343,7 @@
     var yv=function(o){return o.fam==='S1B'?(o.value+30)/20:o.value};
     var mut=css('--muted'),line=css('--line'),acc=css('--accent');
     var s='';
-    [0,0.25,0.5,0.75,1].forEach(function(v){s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(v)+'" y2="'+Y(v)+'" stroke="'+line+'"/><text x="'+(L-8)+'" y="'+(Y(v)+4)+'" text-anchor="end" font-size="13" fill="'+mut+'">'+v.toFixed(2)+'</text>'});
+    [0,0.25,0.5,0.75,1].forEach(function(v){s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(v)+'" y2="'+Y(v)+'" stroke="'+line+'"/><text x="'+(L-8)+'" y="'+(Y(v)+4)+'" text-anchor="end" font-size="'+FS+'" fill="'+mut+'">'+fx(v,2)+'</text>'});
     s+='<text x="'+(L-8)+'" y="'+(T-12)+'" text-anchor="end" font-size="12" fill="'+mut+'">NDVI</text>';
     if(used.some(function(o){return o.fam==='S1'}))s+='<text x="'+(W-R+8)+'" y="'+(T-12)+'" font-size="12" fill="'+css('--violet')+'">koher.</text>';
     if(used.some(function(o){return o.fam==='S1B'})){[-30,-20,-10].forEach(function(v){s+='<text x="'+(W-R+6)+'" y="'+(Y((v+30)/20)+4)+'" font-size="11" fill="'+css('--violet')+'">'+v+'</text>'});s+='<text x="'+(W-R+6)+'" y="'+(T-12)+'" font-size="12" fill="'+css('--violet')+'">VH dB</text>'}
@@ -305,7 +356,16 @@
       s+='<polyline points="'+pts+'" fill="none" stroke="'+c+'" stroke-width="1.5"'+(f==='S1'||f==='S1B'?' stroke-dasharray="4 3"':'')+'/>';
       fams[f].forEach(function(o){s+='<circle cx="'+X(o.date)+'" cy="'+Y(yv(o))+'" r="'+(f==='S1B'?3:4.5)+'" fill="'+c+'"'+(o.conflict?' stroke="'+css('--bad')+'" stroke-width="2"':'')+'><title>'+C.fi(o.date)+' '+esc(o.src)+' '+o.value+(o.id?' · '+esc(o.id):'')+(o.conflict?' · '+esc(o.conflict):'')+'</title></circle>'});
     });
-    s+='<text x="'+L+'" y="'+(H-14)+'" font-size="13" fill="'+mut+'">'+C.fi(ds[0])+'</text><text x="'+(W-R)+'" y="'+(H-14)+'" text-anchor="end" font-size="13" fill="'+mut+'">'+C.fi(ds[ds.length-1])+'</text>';
+    // Kuukausiakseli: ohut viiva ja nimi jokaisen kuukauden alussa
+    var KK=['tammi','helmi','maalis','huhti','touko','kesä','heinä','elo','syys','loka','marras','joulu'];
+    var y0=+ds[0].slice(0,4), m0=+ds[0].slice(5,7), ticks=0;
+    for(var k=0;k<24;k++){
+      var yy=y0+Math.floor((m0-1+k)/12), mm=(m0-1+k)%12, md=yy+'-'+String(mm+1).padStart(2,'0')+'-01';
+      if(t(md)>x1) break; if(t(md)<x0) continue;
+      var xm=X(md); ticks++;
+      s+='<line x1="'+xm+'" x2="'+xm+'" y1="'+(H-B)+'" y2="'+(H-B+5)+'" stroke="'+mut+'"/><text x="'+(xm+3)+'" y="'+(H-B+18)+'" font-size="'+FS+'" fill="'+mut+'">'+KK[mm]+'</text>';
+    }
+    if(!ticks) s+='<text x="'+L+'" y="'+(H-B+18)+'" font-size="'+FS+'" fill="'+mut+'">'+C.fi(ds[0])+'</text><text x="'+(W-R)+'" y="'+(H-B+18)+'" text-anchor="end" font-size="'+FS+'" fill="'+mut+'">'+C.fi(ds[ds.length-1])+'</text>';
     svg.innerHTML=s;
     svg.setAttribute('aria-label','NDVI-aikasarja '+C.fi(ds[0])+'–'+C.fi(ds[ds.length-1])+(res.best?', tunnistettu niittoväli '+C.fi(res.best.start)+'–'+C.fi(res.best.end):''));
     $('legend').innerHTML=Object.keys(fams).map(function(f){return '<span><i style="background:var('+COL[f]+')"></i>'+NAME[f]+'</span>'}).join('')+'<span><i style="background:var(--accent);opacity:.35;border-radius:2px"></i>tunnistettu niittoväli</span>'+(rl?'<span><i style="background:var(--bad);border-radius:1px;width:3px"></i>määräpäivä</span>':'');
@@ -406,7 +466,7 @@
   }
   function updateParcel(){
     var h=parcelHtml(); $('parcelCard').innerHTML=h; $('parcelCard').hidden=!h; $('parcelSide').innerHTML=h;
-    $('toStep2').disabled=!fieldState; goStepButtons();
+    $('toStep2').disabled=!fieldState; goStepButtons(); updateMobBar();
   }
   function goStepButtons(){stepBtns.forEach(function(b){var i=+b.dataset.step;b.disabled=i>maxStep||(i>1&&!fieldState)})}
   function parseGeo(){
@@ -555,6 +615,7 @@
     if(!on) $('runGo').disabled=measureSel.isMuu();
     $('runGo').textContent=on?'Haetaan kuvia…':'Hae kuvat ja laske tulos →';
     psOrderBtn.disabled=on||!psSel||!psSel.chosen.length; psOrderBtn.classList.toggle('primary',!psOrderBtn.disabled); stopBtn.hidden=!on&&!pollTimer; if(!on) progEl.hidden=true;
+    updateMobBar();
   }
   async function run(fn){
     if(busy) return; ctrl=window.AbortController?new AbortController():null; setBusy(true);
@@ -593,7 +654,10 @@
   var sv=getSess('niitto_cdse'); if(sv){try{var o=JSON.parse(sv);cdseId.value=o.id||'';cdseSecret.value=o.secret||'';cdseRem.checked=true;$('s1On').checked=true}catch(e){}}
   function storeCdse(){setSess('niitto_cdse',cdseRem.checked&&cdseId.value&&cdseSecret.value?JSON.stringify({id:cdseId.value,secret:cdseSecret.value}):null)}
   [cdseId,cdseSecret,cdseRem].forEach(function(el){el.addEventListener('change',storeCdse)});
-  $('s1On').addEventListener('change',function(){if(this.checked&&(!cdseId.value||!cdseSecret.value)) $('s1Box').open=true});
+  // Tutka vaatii tunnuksen: avataan tunnuskentät heti valinnan alle näkyviin ja kohdistetaan ensimmäiseen.
+  $('s1On').addEventListener('change',function(){
+    if(this.checked&&(!cdseId.value||!cdseSecret.value)){var d=$('s1Box');d.open=true;d.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(function(){cdseId.focus({preventScroll:true})},300)}
+  });
   async function fetchS1(f,r){
     var li=say('Haetaan Sentinel-1-tutkahavainnot '+C.fi(r[0])+'–'+C.fi(r[1])+'…');
     var o=fetchOpts(); o.onProgress=function(m){li.textContent=m};

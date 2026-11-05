@@ -125,7 +125,13 @@ const item = (id, c, d, p, nir, e) => ({ id, collection: c, properties: { dateti
   const srcs2 = await page.$$eval('#obsTable tbody tr .s', (s) => s.map((x) => x.value));
   assert.strictEqual(srcs2.filter((s) => s === 'Sentinel-2').length, 3);
   assert.strictEqual(srcs2.filter((s) => s === 'PlanetScope').length, 2, 'PlanetScope säilyy');
-  assert.ok(await page.isVisible('#compare'));
+  // Seuranta ja vertailu ovat neuvojille suljetussa osiossa; tuloskortissa on tiivistelmä.
+  assert.ok(await page.isVisible('#advRes') && !(await page.isVisible('#compare')), 'vertailu suljettuna');
+  assert.match(await page.textContent('#advResSum'), /lähdevertailu: lisälähteet tarkensivat/);
+  assert.ok(await page.isVisible('#rvMini'), 'seurannan tiivistelmä tuloksessa');
+  assert.match(await page.textContent('#rvMini'), /Ruokaviraston kaltainen seuranta:/);
+  await page.click('#rvMore');
+  assert.ok(await page.isVisible('#compare') && await page.isVisible('#rvCard'), 'linkki avaa osion');
   const cmp = await page.$$eval('#cmpTable tbody tr td:first-child', (td) => td.map((x) => x.textContent));
   assert.deepStrictEqual(cmp, ['Sentinel-2 L2A', 'HLS ilman Landsatia (S30)', 'HLS (Sentinel-2 + Landsat)', 'PlanetScope', 'Sentinel-2 + PlanetScope', 'HLS + PlanetScope']);
   assert.match(await page.textContent('#cmpSummary'), /Sentinel-2 L2A: niittoväli 10\.7\.2026–17\.8\.2026 \(38 vrk\)/);
@@ -198,7 +204,15 @@ const item = (id, c, d, p, nir, e) => ({ id, collection: c, properties: { dateti
   await page.click('#stepNav button[data-step="2"]');
   await page.click('#toCreds');
   assert.ok(await page.$eval('#tunnukset', (d) => d.open));
+  assert.ok(!(await page.isVisible('#mobGo')), 'alapalkki vain kapealla näytöllä');
   await page.setViewportSize({ width: 390, height: 900 });
+  // Mobiili: vaiheen pääpainike alapalkissa, ja tuloksessa Vipu-vastaus heti tuloskortin jälkeen
+  assert.match(await page.textContent('#mobGo'), /Hae kuvat ja laske tulos/);
+  await page.click('#stepNav button[data-step="3"]');
+  const tops = await page.evaluate(() => ['resCard', 'chartCard'].map((id) => document.getElementById(id).getBoundingClientRect().top).concat(document.querySelector('.vipu').getBoundingClientRect().top));
+  assert.ok(tops[0] < tops[2] && tops[2] < tops[1], 'tulos → Vipu-vastaus → käyrä');
+  if (await page.inputValue('#out')) assert.match(await page.textContent('#mobGo'), /Kopioi teksti Vipuun/);
+  await page.click('#stepNav button[data-step="2"]');
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   assert.ok(!overflow, 'ei vaakavieritystä puhelinleveydellä');
   await page.screenshot({ path: path.join(process.env.SHOT_DIR || require('os').tmpdir(), 'selain_mobiili.png'), fullPage: false });
