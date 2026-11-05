@@ -1,14 +1,14 @@
 // Workerin testit ilman verkkoa: Ruokaviraston vastaus korvataan mockilla. Aja: node worker/test.js
 import assert from 'node:assert';
-import worker, { checkRequest } from './src/index.js';
+import worker, { checkRequest, checkCdse } from './src/index.js';
 
 let n = 0;
 const t = async (name, f) => { await f(); n++; console.log('ok', name); };
 const ORIGIN = 'https://joriim.github.io';
 const BASE = 'https://niittoraportti-rv.example.workers.dev';
 const calls = [];
-globalThis.fetch = async (url) => {
-  calls.push(String(url));
+globalThis.fetch = async (url, init) => {
+  calls.push(String(url)); calls.init = init;
   return new Response(JSON.stringify({ type: 'FeatureCollection', features: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 };
 const get = (path, origin = ORIGIN, method = 'GET') =>
@@ -75,6 +75,34 @@ await t('Ruokavirasto ei vastaa → 502 CORS-otsakkeella', async () => {
 await t('ALLOWED_ORIGINS-muuttuja ohittaa oletuksen', async () => {
   const r = await worker.fetch(new Request(BASE + WFS, { headers: { Origin: 'https://oma.example' } }), { ALLOWED_ORIGINS: 'https://oma.example' }, { waitUntil() {} });
   assert.strictEqual(r.status, 200);
+});
+
+const post = (path, body, headers = {}, origin = ORIGIN) =>
+  worker.fetch(new Request(BASE + path, { method: 'POST', body, headers: { ...(origin ? { Origin: origin } : {}), ...headers } }), {}, { waitUntil() {} });
+
+await t('CDSE: tunnus ja Statistical API välitetään POSTina, ei välimuistia', async () => {
+  let r = await post('/cdse/token', 'grant_type=client_credentials&client_id=a&client_secret=b', { 'Content-Type': 'application/x-www-form-urlencoded' });
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(calls.at(-1), 'https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token');
+  assert.strictEqual(calls.init.method, 'POST');
+  assert.match(calls.init.body, /client_secret=b/);
+  assert.strictEqual(r.headers.get('Cache-Control'), 'no-store');
+  assert.strictEqual(r.headers.get('Access-Control-Allow-Origin'), ORIGIN);
+  r = await post('/cdse/statistics', '{"input":{}}', { 'Content-Type': 'application/json', Authorization: 'Bearer abc' });
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(calls.at(-1), 'https://sh.dataspace.copernicus.eu/statistics/v1');
+  assert.strictEqual(calls.init.headers.Authorization, 'Bearer abc');
+});
+
+await t('CDSE: väärät kutsut hylätään', async () => {
+  const before = calls.length;
+  assert.strictEqual((await post('/cdse/token', 'grant_type=password&username=x', { 'Content-Type': 'application/x-www-form-urlencoded' })).status, 400);
+  assert.strictEqual((await post('/cdse/statistics', '{}', { 'Content-Type': 'application/json' })).status, 401);
+  assert.strictEqual((await post('/cdse/process', '{}', { 'Content-Type': 'application/json', Authorization: 'Bearer a' })).status, 404);
+  assert.strictEqual((await post('/cdse/token', 'grant_type=client_credentials', { 'Content-Type': 'application/x-www-form-urlencoded' }, 'https://example.com')).status, 403);
+  assert.strictEqual((await get('/cdse/token')).status, 405);
+  assert.strictEqual(calls.length, before);
+  assert.strictEqual(checkCdse(new URL(BASE + '/cdse/statistics'), new Request(BASE, { method: 'POST', headers: { 'Content-Type': 'text/plain' } })).status, 400);
 });
 
 console.log(n + ' testiä läpi');

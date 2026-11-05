@@ -4,6 +4,8 @@
  * HLS v2.0 (S30 ja L30) haetaan Microsoftin Planetary Computerista (STAC + SAS-token,
  * ei käyttäjätunnusta). PlanetScope haetaan Planetin Data API:sta ja tilataan
  * Orders API:lla lohkoon rajattuna ja Sentinel-2:een harmonisoituna (vaatii API-avaimen).
+ * Sentinel-1-tutkan VV/VH-takaisinsironta (γ⁰, maastokorjattu) lasketaan lohkon keskiarvona
+ * Copernicus Data Space Ecosystemin Sentinel Hub Statistical API:lla (maksuton CDSE-tunnus).
  *
  * Jokaisesta kuvasta lasketaan lohkon sisältä (reunapuskurin verran kutistettuna):
  *   arvo         = kelvollisten pikselien NDVI-mediaani
@@ -25,6 +27,8 @@
   var PC_SAS = 'https://planetarycomputer.microsoft.com/api/sas/v1/token';
   var PL_DATA = 'https://api.planet.com/data/v1';
   var PL_ORDERS = 'https://api.planet.com/compute/ops/orders/v2';
+  var CDSE_TOKEN = 'https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token';
+  var CDSE_STATS = 'https://sh.dataspace.copernicus.eu/statistics/v1';
 
   // ---------- Projektio: WGS84 ↔ UTM (pohjoinen) ja ETRS-TM35FIN ----------
   // ETRS-TM35FIN (EPSG:3067) = UTM-vyöhyke 35 GRS80-ellipsoidilla; ero WGS84:ään on alle millimetrin.
@@ -264,20 +268,23 @@
 
   // Valitsee päivää ja sensoriperhettä kohden kuvan, jossa on eniten kelvollisia pikseleitä,
   // ja laskee muuttuneen osuuden edellisestä kelvollisesta havainnosta.
+  // Kuvat, joissa lohkolla ei ole yhtään kelvollista pikseliä, palautetaan arvolla null ja
+  // kelvollisuudella 0 %, jotta ne näkyvät pois jätettyjen listassa eivätkä katoa hiljaa.
   function finalize(raw, opts) {
     var byDay = {};
     raw.forEach(function (o) {
-      if (!o || o.value == null) return;
-      var k = o.fam + '|' + o.date;
-      if (!byDay[k] || o.nValid > byDay[k].nValid) byDay[k] = o;
+      if (!o) return;
+      var k = o.fam + '|' + o.date, cur = byDay[k];
+      if (!cur || (cur.value == null && o.value != null) || (o.value != null && o.nValid > cur.nValid)) byDay[k] = o;
     });
     var list = Object.keys(byDay).map(function (k) { return byDay[k]; }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
     var prev = {};
     return list.map(function (o) {
+      if (o.value == null) return { date: o.date, src: o.src, id: o.id, value: null, valid: 0, changed: null };
       var s = stats(o.ndvi, o.fw, prev[o.fam] || null, opts.ndviDrop);
       if (s.valid >= opts.minValid) prev[o.fam] = o;
       return { date: o.date, src: o.src, id: o.id, value: s.value, valid: s.valid, changed: s.changed };
-    }).filter(function (o) { return o.value != null; });
+    });
   }
 
   function defaults(opts) {
@@ -379,10 +386,14 @@
 
   // ---------- Sentinel-2 L2A (Planetary Computer) ----------
   // Pelkkä Sentinel-2 ilman HLS:n harmonisointia: 10 m punainen (B04) ja NIR (B08), pilvet
-  // Scene Classification -kerroksesta (SCL, 20 m). Kelvollisia luokkia ovat 4 kasvillisuus,
-  // 5 paljas maa ja 6 vesi; pilvet, varjot, sirrus, lumi ja virheelliset pikselit hylätään.
+  // Scene Classification -kerroksesta (SCL, 20 m). Kelvollisia luokkia ovat 4 kasvillisuus ja
+  // 5 paljas maa. Luokka 6 (vesi) hylätään: pellolla se on yleensä pilven varjo tai märkä usva.
+  // Lisäksi sininen kanava (B02) hylkää ohuen pilven ja usvan, jota SCL ei tunnista:
+  // kasvillisuuden ja sängen pintaheijastus sinisellä on alle 0,10. Planetary Computerissa ei ole
+  // pilvitodennäköisyyskerrosta (MSK_CLDPRB), joten sinistä kanavaa käytetään sen sijaan.
   var S2_COLL = 'sentinel-2-l2a';
-  function sclValid(v) { return v === 4 || v === 5 || v === 6; }
+  var S2_BLUE_MAX = 0.10;
+  function sclValid(v) { return v === 4 || v === 5; }
   // Prosessointiversiosta 04.00 alkaen (25.1.2022) L2A-arvoissa on +1000 siirtymä (BOA_ADD_OFFSET).
   function s2Offset(item) {
     var b = parseFloat((item.properties || {})['s2:processing_baseline']);
@@ -412,13 +423,14 @@
   async function s2Item(item, field, o) {
     var a = item.assets || {};
     if (!a.B04 || !a.B08 || !a.SCL) throw new Error('Sentinel-2-kuvasta ' + item.id + ' puuttuu kaista (B04, B08 tai SCL).');
-    var urls = await Promise.all([a.B04.href, a.B08.href, a.SCL.href].map(signHref));
+    var hasBlue = !!a.B02;
+    var urls = await Promise.all([a.B04.href, a.B08.href, a.SCL.href].concat(hasBlue ? [a.B02.href] : []).map(signHref));
     var tiffs = await Promise.all(urls.map(function (u) { return openTiff(u, 'Planetary Computer (Sentinel-2-kuva)'); }));
     var imgs = await Promise.all(tiffs.map(function (t) { return t.getImage(); }));
     var epsg = epsgOf(imgs[0], epsgHint(item));
     var fw = fieldWindow(imgs[0], epsg, field, o.bufferM);
     if (!fw || !fw.n) return null;
-    var rs = await Promise.all(imgs.slice(0, 2).map(function (im) { return im.readRasters({ window: fw.window, samples: [0] }); }));
+    var rs = await Promise.all([imgs[0], imgs[1]].concat(hasBlue ? [imgs[3]] : []).map(function (im) { return im.readRasters({ window: fw.window, samples: [0] }); }));
     // SCL on karkeammassa ruudukossa: luetaan sama alue ja haetaan kullekin 10 m pikselille sen 20 m solu.
     var sImg = imgs[2], sRes = sImg.getResolution(), sOri = sImg.getOrigin();
     var x0 = fw.origin[0] + fw.window[0] * fw.res[0], y0 = fw.origin[1] + fw.window[1] * fw.res[1];
@@ -426,7 +438,8 @@
     var sc0 = Math.max(0, Math.floor((x0 - sOri[0]) / sRes[0])), sr0 = Math.max(0, Math.floor((y0 - sOri[1]) / sRes[1]));
     var sc1 = Math.min(sImg.getWidth(), Math.ceil((x1 - sOri[0]) / sRes[0])), sr1 = Math.min(sImg.getHeight(), Math.ceil((y1 - sOri[1]) / sRes[1]));
     var sw = sc1 - sc0, scl = (await sImg.readRasters({ window: [sc0, sr0, sc1, sr1], samples: [0] }))[0];
-    var red = rs[0][0], nir = rs[1][0], off = s2Offset(item), ndvi = new Float32Array(fw.w * fw.h);
+    var red = rs[0][0], nir = rs[1][0], blue = hasBlue ? rs[2][0] : null, off = s2Offset(item), ndvi = new Float32Array(fw.w * fw.h);
+    var blueMax = (o.blueMax != null ? o.blueMax : S2_BLUE_MAX) * 10000;
     for (var i = 0; i < ndvi.length; i++) {
       if (!fw.mask[i]) { ndvi[i] = NaN; continue; }
       var r = Math.floor(i / fw.w), c = i - r * fw.w;
@@ -434,7 +447,8 @@
       var qc = Math.floor((x - sOri[0]) / sRes[0]) - sc0, qr = Math.floor((y - sOri[1]) / sRes[1]) - sr0;
       var sv = qc >= 0 && qr >= 0 && qc < sw && qr < sr1 - sr0 ? scl[qr * sw + qc] : 0;
       var R = red[i] - off, N = nir[i] - off;
-      ndvi[i] = sclValid(sv) && red[i] > 0 && nir[i] > 0 && R > 0 && N > 0 ? (N - R) / (N + R) : NaN;
+      var hazy = blue && blue[i] - off > blueMax;
+      ndvi[i] = sclValid(sv) && !hazy && red[i] > 0 && nir[i] > 0 && R > 0 && N > 0 ? (N - R) / (N + R) : NaN;
     }
     var st = stats(ndvi, fw, null, 0);
     return { date: dateOf(item.properties.datetime), src: 'Sentinel-2', fam: 'S2', id: item.id, ndvi: ndvi, fw: fw, value: st.value, nValid: st.nValid };
@@ -454,6 +468,115 @@
       return r;
     }, o.signal);
     return { obs: finalize(raw, o), searched: items.length, skipped: skipped };
+  }
+
+
+  // ---------- Sentinel-1 (Copernicus Data Space Ecosystem, Statistical API) ----------
+  // Ruokavirasto käyttää Sentinel-1:n takaisinsirontaa ja 12 vrk koherenssia. Selaimesta saatavilla on
+  // takaisinsironta: CDSE laskee maastokorjatun γ⁰-arvon (GAMMA0_TERRAIN) ja palauttaa lohkon
+  // keskiarvon kuvauspäivittäin. Nousevat ja laskevat radat haetaan erikseen, koska kuvausgeometria
+  // muuttaa tasoa. Koherenssia CDSE ei laske; sen voi tuoda CSV:nä (lähde "Sentinel-1 koherenssi").
+  var S1_EVAL = '//VERSION=3\nfunction setup(){return{input:[{bands:["VV","VH","dataMask"]}],' +
+    'output:[{id:"s1",bands:2,sampleType:"FLOAT32"},{id:"dataMask",bands:1}]}}\n' +
+    'function evaluatePixel(s){return{s1:[s.VV,s.VH],dataMask:[s.dataMask]}}';
+  var cdseCache = {};
+
+  function jwtExp(tok) {
+    try {
+      var b = tok.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      var js = JSON.parse(typeof atob === 'function' ? atob(b) : Buffer.from(b, 'base64').toString('utf8'));
+      return js.exp ? js.exp * 1000 : null;
+    } catch (e) { return null; }
+  }
+
+  // Suora kutsu; jos selain estää sen (CORS tai verkko) ja välityspalvelin on annettu, yritetään sen kautta.
+  async function cdseFetch(url, path, req, service, proxy) {
+    try { return await getJson(url, req, service); } catch (e) {
+      if (!proxy || !(e && /yhteys epäonnistui/.test(e.message))) throw e;
+      return getJson(proxy.replace(/\/+$/, '') + '/cdse/' + path, req, service + ' välityspalvelimen kautta');
+    }
+  }
+
+  async function cdseToken(id, secret, opts) {
+    if (!id || !secret) throw new Error('Syötä Copernicus Data Space -tunnuksen client id ja client secret. Ohjeet: Tunnukset ja ohjeet.');
+    var c = cdseCache[id];
+    if (c && c.secret === secret && (!c.exp || c.exp - Date.now() > 60e3)) return c.p;
+    var body = 'grant_type=client_credentials&client_id=' + encodeURIComponent(id) + '&client_secret=' + encodeURIComponent(secret);
+    c = cdseCache[id] = { secret: secret, exp: null, p: null };
+    c.p = cdseFetch(CDSE_TOKEN, 'token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body },
+      'Copernicus Data Space (tunnus)', opts && opts.proxy).then(function (js) {
+      if (!js.access_token) throw new Error('Copernicus Data Space ei palauttanut tokenia.');
+      c.exp = jwtExp(js.access_token) || (Date.now() + (js.expires_in || 600) * 1000);
+      return js.access_token;
+    });
+    c.p.catch(function () { if (cdseCache[id] === c) delete cdseCache[id]; });
+    return c.p;
+  }
+
+  function utmEpsgFor(field) {
+    var lon = (field.bbox[0] + field.bbox[2]) / 2;
+    return 32600 + Math.min(60, Math.max(1, Math.floor((lon + 180) / 6) + 1));
+  }
+
+  function s1Request(field, start, end, dir) {
+    var epsg = utmEpsgFor(field);
+    var polys = mapPolys(field.polys, function (lon, lat) { return toUtm(lon, lat, epsg); });
+    return {
+      input: {
+        bounds: { geometry: polys.length === 1 ? { type: 'Polygon', coordinates: polys[0] } : { type: 'MultiPolygon', coordinates: polys },
+          properties: { crs: 'http://www.opengis.net/def/crs/EPSG/0/' + epsg } },
+        data: [{ type: 'sentinel-1-grd',
+          dataFilter: { acquisitionMode: 'IW', polarization: 'DV', resolution: 'HIGH', orbitDirection: dir },
+          processing: { backCoeff: 'GAMMA0_TERRAIN', orthorectify: true, demInstance: 'COPERNICUS_30' } }]
+      },
+      aggregation: { timeRange: { from: start + 'T00:00:00Z', to: end + 'T23:59:59Z' }, aggregationInterval: { of: 'P1D' },
+        evalscript: S1_EVAL, resx: 10, resy: 10 },
+      calculations: { default: {} }
+    };
+  }
+
+  function db(x) { return 10 * Math.log10(x); }
+
+  /** Muuntaa Statistical API -vastauksen havainnoiksi (lähde "Sentinel-1 VH", arvo dB). */
+  function s1Parse(js, dir, opts) {
+    var obs = [], skipped = [], tag = dir === 'ASCENDING' ? 'ASC' : 'DESC', minValid = opts && opts.minValid != null ? opts.minValid : 50;
+    (js.data || []).forEach(function (d) {
+      var date = dateOf(d.interval && d.interval.from);
+      if (d.error) { skipped.push(date + ' ' + tag + ': ' + (d.error.message || d.error.type || 'virhe')); return; }
+      var b = d.outputs && d.outputs.s1 && d.outputs.s1.bands;
+      var vv = b && b.B0 && b.B0.stats, vh = b && b.B1 && b.B1.stats;
+      if (!vv || !vh) return;
+      var n = vh.sampleCount || 0, nd = vh.noDataCount || 0, valid = n ? Math.round((n - nd) / n * 100) : 0;
+      var mVh = +vh.mean, mVv = +vv.mean;
+      if (!(n - nd > 0) || !isFinite(mVh) || !(mVh > 0)) return;   // ei kuvausta tänä päivänä
+      if (valid < minValid) { skipped.push(date + ' ' + tag + ': kelvollisia pikseleitä ' + valid + ' %'); return; }
+      var vvDb = isFinite(mVv) && mVv > 0 ? Math.round(db(mVv) * 100) / 100 : null;
+      obs.push({ date: date, src: 'Sentinel-1 VH', id: 'S1 GRD ' + tag + ' ' + date + (vvDb != null ? ' VV ' + vvDb.toFixed(2) + ' dB' : ''),
+        value: Math.round(db(mVh) * 100) / 100, valid: valid, changed: null, vv: vvDb, track: tag });
+    });
+    return { obs: obs, skipped: skipped };
+  }
+
+  /**
+   * Hakee Sentinel-1 VH/VV-takaisinsironnan lohkon keskiarvona kuvauspäivittäin.
+   * creds: { id, secret } (CDSE OAuth -asiakas). opts.proxy: välityspalvelimen osoite CORS-esteen varalle.
+   * Palauttaa { obs, searched, skipped }.
+   */
+  async function fetchS1(field, start, end, creds, opts) {
+    var o = defaults(opts); o.proxy = opts && opts.proxy;
+    o.onProgress('Haetaan Sentinel-1-tunnus Copernicus Data Spacesta…');
+    var tok = await cdseToken(creds && creds.id, creds && creds.secret, o);
+    var obs = [], skipped = [], done = 0;
+    for (var dir of ['ASCENDING', 'DESCENDING']) {
+      if (o.signal && o.signal.aborted) throw new Error('Haku keskeytettiin.');
+      o.onProgress('Sentinel-1: lasketaan lohkon takaisinsironta (' + (dir === 'ASCENDING' ? 'nousevat' : 'laskevat') + ' radat)…', done, 2);
+      var js = await cdseFetch(CDSE_STATS, 'statistics', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
+        body: JSON.stringify(s1Request(field, start, end, dir)) }, 'Copernicus Data Space (Sentinel-1)', o.proxy);
+      var r = s1Parse(js, dir, o);
+      obs = obs.concat(r.obs); skipped = skipped.concat(r.skipped); done++;
+    }
+    obs.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : 1; });
+    return { obs: obs, searched: obs.length + skipped.length, skipped: skipped };
   }
 
   // ---------- PlanetScope ----------
@@ -565,9 +688,10 @@
     fmaskValid: fmaskValid, median: median, stats: stats, finalize: finalize,
     hlsSearch: hlsSearch, fetchHls: fetchHls, signHref: signHref,
     s2Search: s2Search, fetchS2: fetchS2, sclValid: sclValid, s2Offset: s2Offset,
+    fetchS1: fetchS1, s1Request: s1Request, s1Parse: s1Parse, cdseToken: cdseToken, _clearCdse: function () { cdseCache = {}; },
     psSearch: psSearch, psOrder: psOrder, psOrderStatus: psOrderStatus, psProcess: psProcess,
     _setGeoTIFF: function (g) { GT = g; }, _clearSas: function () { sasCache = {}; },
-    ENDPOINTS: { PC_STAC: PC_STAC, PC_SAS: PC_SAS, PL_DATA: PL_DATA, PL_ORDERS: PL_ORDERS }
+    ENDPOINTS: { PC_STAC: PC_STAC, PC_SAS: PC_SAS, PL_DATA: PL_DATA, PL_ORDERS: PL_ORDERS, CDSE_TOKEN: CDSE_TOKEN, CDSE_STATS: CDSE_STATS }
   };
   if (typeof module === 'object' && module.exports) module.exports = api; else root.NiittoHaku = api;
 })(typeof self !== 'undefined' ? self : this);

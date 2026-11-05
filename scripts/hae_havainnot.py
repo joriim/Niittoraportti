@@ -1,11 +1,15 @@
 """
-Hakee lohkon HLS- ja PlanetScope-havainnot ja kirjoittaa ne Niittoraportin CSV-tuontimuotoon
+Hakee lohkon HLS-, PlanetScope- ja Sentinel-1-havainnot ja kirjoittaa ne Niittoraportin CSV-tuontimuotoon
 (päivä; lähde; tunniste; NDVI-mediaani; kelvolliset %; muuttunut %).
 
 Laskenta on sama kuin selainsovelluksessa (datahaku.js):
   - pikseli kuuluu lohkoon, jos sen keskipiste on vähintään reunapuskurin päässä reunasta
   - HLS: Fmask hylkää sirruksen, pilven, pilven viereiset pikselit, varjon, lumen ja korkean aerosolin
   - PlanetScope: UDM2 clear -kaista, 4-kaistainen SR harmonisoituna Sentinel-2:een, lohkoon rajattuna
+  - Sentinel-1: VV/VH-takaisinsironta γ⁰ (maastokorjattu) lohkon keskiarvona Copernicus Data Space
+    Ecosystemin Statistical API:sta, nousevat ja laskevat radat erikseen (lähde "Sentinel-1 VH", arvo dB)
+  - kuvat, joissa lohkolla ei ole yhtään kelvollista pikseliä, kirjoitetaan tyhjällä NDVI:llä ja 0 %:lla,
+    jotta sovellus näyttää ne pois jätettyjen listassa
   - muuttunut % = osuus pikseleistä, joissa NDVI laski ≥ kynnys edellisestä saman sensoriperheen
     havainnosta, jossa kelvollisia pikseleitä oli vähintään raja-arvon verran
 
@@ -23,6 +27,10 @@ Esimerkkejä:
     # Lisäksi PlanetScope (Planet-API-avain); tilaus kuluttaa kiintiötä ja kysyy vahvistuksen
     export PL_API_KEY=...
     python hae_havainnot.py --lohko lohko.geojson --alku 2026-05-01 --loppu 2026-09-30 --planet
+
+    # Sentinel-1-tutka (CDSE OAuth -asiakas, ks. README)
+    export CDSE_CLIENT_ID=... CDSE_CLIENT_SECRET=...
+    python hae_havainnot.py --lohko lohko.geojson --alku 2026-05-01 --loppu 2026-10-15 --sentinel1
 
     # Jatka aiemmin tehtyä Planet-tilausta
     python hae_havainnot.py --lohko lohko.geojson --planet-tilaus <tilauksen-id> --hls-lahde ei
@@ -47,6 +55,11 @@ PC_SAS = "https://planetarycomputer.microsoft.com/api/sas/v1/token"
 NASA_STAC = "https://cmr.earthdata.nasa.gov/stac/LPCLOUD"
 PL_DATA = "https://api.planet.com/data/v1"
 PL_ORDERS = "https://api.planet.com/compute/ops/orders/v2"
+CDSE_TOKEN = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
+CDSE_STATS = "https://sh.dataspace.copernicus.eu/statistics/v1"
+S1_EVAL = """//VERSION=3
+function setup(){return{input:[{bands:["VV","VH","dataMask"]}],output:[{id:"s1",bands:2,sampleType:"FLOAT32"},{id:"dataMask",bands:1}]}}
+function evaluatePixel(s){return{s1:[s.VV,s.VH],dataMask:[s.dataMask]}}"""
 
 HLS = {
     "pc": {"hls2-s30": ("B04", "B8A", "HLS-S30"), "hls2-l30": ("B04", "B05", "HLS-L30")},
@@ -141,12 +154,17 @@ def tilastot(ndvi, iw, edel, pudotus):
 def viimeistele(raaka, a):
     paras = {}
     for o in raaka:
-        if o and o["arvo"] is not None:
-            k = (o["perhe"], o["pvm"])
-            if k not in paras or o["n"] > paras[k]["n"]:
-                paras[k] = o
+        if not o:
+            continue
+        k = (o["perhe"], o["pvm"])
+        cur = paras.get(k)
+        if cur is None or (cur["arvo"] is None and o["arvo"] is not None) or (o["arvo"] is not None and o["n"] > cur["n"]):
+            paras[k] = o
     edel, ulos = {}, []
     for o in sorted(paras.values(), key=lambda x: x["pvm"]):
+        if o["arvo"] is None:  # ei yhtään kelvollista pikseliä → näkyy sovelluksessa pois jätettynä
+            ulos.append({"pvm": o["pvm"], "lahde": o["lahde"], "id": o["id"], "arvo": None, "kelvolliset": 0, "muuttunut": None, "n": 0})
+            continue
         s = tilastot(o["ndvi"], o["iw"], edel.get(o["perhe"]), a.pudotus)
         if s["kelvolliset"] >= a.kelvolliset:
             edel[o["perhe"]] = o
@@ -376,10 +394,82 @@ def ps_kasittele(tulokset, lohko, a, kansio):
 # ---------------------------------------------------------------- pääohjelma
 
 
+# ---------------------------------------------------------------- Sentinel-1 (CDSE)
+
+
+def cdse_token(asiakas, salaisuus):
+    r = requests.post(CDSE_TOKEN, data={"grant_type": "client_credentials", "client_id": asiakas, "client_secret": salaisuus}, timeout=60)
+    if r.status_code in (400, 401):
+        sys.exit("Copernicus Data Space hylkäsi tunnuksen: tarkista CDSE_CLIENT_ID ja CDSE_CLIENT_SECRET.")
+    r.raise_for_status()
+    return r.json()["access_token"]
+
+
+def s1_pyynto(lohko, alku, loppu, suunta):
+    from pyproj import Transformer
+    from shapely.ops import transform
+
+    lon = (lohko["wgs"].bounds[0] + lohko["wgs"].bounds[2]) / 2
+    epsg = 32600 + min(60, max(1, int((lon + 180) // 6) + 1))
+    g = transform(Transformer.from_crs(4326, epsg, always_xy=True).transform, lohko["wgs"])
+    return {
+        "input": {"bounds": {"geometry": json.loads(json.dumps(g.__geo_interface__)), "properties": {"crs": f"http://www.opengis.net/def/crs/EPSG/0/{epsg}"}},
+                  "data": [{"type": "sentinel-1-grd",
+                            "dataFilter": {"acquisitionMode": "IW", "polarization": "DV", "resolution": "HIGH", "orbitDirection": suunta},
+                            "processing": {"backCoeff": "GAMMA0_TERRAIN", "orthorectify": True, "demInstance": "COPERNICUS_30"}}]},
+        "aggregation": {"timeRange": {"from": f"{alku}T00:00:00Z", "to": f"{loppu}T23:59:59Z"}, "aggregationInterval": {"of": "P1D"},
+                        "evalscript": S1_EVAL, "resx": 10, "resy": 10},
+        "calculations": {"default": {}},
+    }
+
+
+def s1_jasenna(js, suunta, kelv_min=50):
+    """Statistical API -vastaus → havainnot (sama muunnos kuin datahaku.js s1Parse)."""
+    import math
+
+    tag = "ASC" if suunta == "ASCENDING" else "DESC"
+    ulos = []
+    for d in js.get("data", []):
+        pvm = d["interval"]["from"][:10]
+        b = (d.get("outputs") or {}).get("s1", {}).get("bands", {})
+        vv, vh = (b.get("B0") or {}).get("stats"), (b.get("B1") or {}).get("stats")
+        if d.get("error") or not vv or not vh:
+            continue
+        n, nd = vh.get("sampleCount", 0), vh.get("noDataCount", 0)
+        try:
+            m_vh, m_vv = float(vh["mean"]), float(vv["mean"])
+        except (TypeError, ValueError):
+            continue
+        if n - nd <= 0 or not math.isfinite(m_vh) or m_vh <= 0:
+            continue
+        kelv = round((n - nd) / n * 100)
+        if kelv < kelv_min:
+            continue
+        vv_db = round(10 * math.log10(m_vv), 2) if math.isfinite(m_vv) and m_vv > 0 else None
+        ulos.append({"pvm": pvm, "lahde": "Sentinel-1 VH", "id": f"S1 GRD {tag} {pvm}" + (f" VV {vv_db:.2f} dB" if vv_db is not None else ""),
+                     "arvo": round(10 * math.log10(m_vh), 2), "kelvolliset": kelv, "muuttunut": None, "n": n - nd})
+    return ulos
+
+
+def hae_s1(lohko, a):
+    asiakas, salaisuus = os.environ.get("CDSE_CLIENT_ID"), os.environ.get("CDSE_CLIENT_SECRET")
+    if not (asiakas and salaisuus):
+        sys.exit("Aseta Copernicus Data Space -tunnus: export CDSE_CLIENT_ID=... CDSE_CLIENT_SECRET=... (ohjeet README:ssä).")
+    tok = cdse_token(asiakas, salaisuus)
+    ulos = []
+    for suunta in ("ASCENDING", "DESCENDING"):
+        r = requests.post(CDSE_STATS, json=s1_pyynto(lohko, a.alku, a.loppu, suunta), headers={"Authorization": f"Bearer {tok}"}, timeout=300)
+        r.raise_for_status()
+        ulos += s1_jasenna(r.json(), suunta, a.kelvolliset)
+    print(f"Sentinel-1: {len(ulos)} havaintoa", file=sys.stderr)
+    return sorted(ulos, key=lambda o: (o["pvm"], o["id"]))
+
+
 def kirjoita(havainnot, polku):
-    rivit = ["# päivä;lähde;tunniste;NDVI;kelvolliset %;muuttunut %"]
+    rivit = ["# päivä;lähde;tunniste;arvo (NDVI tai VH dB);kelvolliset %;muuttunut %"]
     for o in havainnot:
-        rivit.append(";".join([o["pvm"], o["lahde"], o["id"], f"{o['arvo']:.3f}", str(o["kelvolliset"]),
+        arvo = "" if o["arvo"] is None else (f"{o['arvo']:.2f}" if o["lahde"] == "Sentinel-1 VH" else f"{o['arvo']:.3f}")
+        rivit.append(";".join([o["pvm"], o["lahde"], o["id"], arvo, str(o["kelvolliset"]),
                                "" if o["muuttunut"] is None else str(o["muuttunut"])]))
     teksti = "\n".join(rivit) + "\n"
     if polku == "-":
@@ -390,13 +480,14 @@ def kirjoita(havainnot, polku):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="Niittoraportin havaintojen haku (HLS, PlanetScope)")
+    ap = argparse.ArgumentParser(description="Niittoraportin havaintojen haku (HLS, PlanetScope, Sentinel-1)")
     ap.add_argument("--lohko", required=True, help="lohkon GeoJSON (WGS84 tai EPSG:3067)")
     ap.add_argument("--alku", help="alkupäivä VVVV-KK-PP")
     ap.add_argument("--loppu", help="loppupäivä VVVV-KK-PP")
     ap.add_argument("--hls-lahde", choices=["pc", "nasa", "ei"], default="pc", help="pc = Planetary Computer (oletus), nasa = LP DAAC (EARTHDATA_TOKEN)")
     ap.add_argument("--planet", action="store_true", help="hae ja tilaa PlanetScope (PL_API_KEY)")
     ap.add_argument("--planet-tilaus", help="käsittele aiemman tilauksen tulokset")
+    ap.add_argument("--sentinel1", action="store_true", help="hae Sentinel-1 VH/VV-takaisinsironta (CDSE_CLIENT_ID, CDSE_CLIENT_SECRET)")
     ap.add_argument("--kylla", action="store_true", help="tilaa kysymättä vahvistusta")
     ap.add_argument("--odota", type=int, default=60, help="Planet-tilauksen enimmäisodotus minuutteina")
     ap.add_argument("--puskuri", type=float, default=10, help="reunapuskuri m")
@@ -408,7 +499,7 @@ def main(argv=None):
 
     lohko = lue_lohko(a.lohko)
     print(f"Lohko {lohko['ala_m2'] / 1e4:.2f} ha", file=sys.stderr)
-    tarvitsee_ajan = a.hls_lahde != "ei" or a.planet
+    tarvitsee_ajan = a.hls_lahde != "ei" or a.planet or a.sentinel1
     if tarvitsee_ajan and not (a.alku and a.loppu):
         sys.exit("Anna --alku ja --loppu.")
 
@@ -439,7 +530,10 @@ def main(argv=None):
             with tempfile.TemporaryDirectory() as kansio:
                 raaka += ps_kasittele(tulokset, lohko, a, kansio)
 
-    kirjoita(viimeistele(raaka, a), a.ulos)
+    tulos = viimeistele(raaka, a)
+    if a.sentinel1:
+        tulos = sorted(tulos + hae_s1(lohko, a), key=lambda o: o["pvm"])
+    kirjoita(tulos, a.ulos)
 
 
 if __name__ == "__main__":

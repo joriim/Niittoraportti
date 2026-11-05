@@ -205,3 +205,131 @@ t('lähdevertailu: Landsat (HLS) tarkentaa pelkkää Sentinel-2:ta', () => {
   assert.ok(r.summary.text.some((s) => /HLS \(Sentinel-2 \+ Landsat\) rajasi niiton 8 vrk väliin, 30 vrk tarkemmin/.test(s)));
 });
 console.log('lähdevertailutestit läpi');
+
+// ---------- Ruokaviraston kaltainen seuranta (monitor) ----------
+const day = (d0, k) => new Date(Date.parse(d0) + k * 864e5).toISOString().slice(0, 10);
+const s2mow = [0.70, 0.74, 0.77, 0.78, 0.80, 0.79, 0.81, 0.52, 0.50, 0.58, 0.66, 0.70, 0.71, 0.70, 0.69, 0.70, 0.70, 0.69, 0.68, 0.68]
+  .map((v, i) => ({ date: day('2026-07-01', i * 4), src: 'Sentinel-2', id: 'S2 ' + i, value: v, valid: 95, changed: i === 7 ? 95 : null }));
+const s1vh = Array.from({ length: 14 }, (_, i) => {
+  const d = day('2026-07-02', i * 6);
+  return { date: d, src: 'Sentinel-1 VH', id: 'S1 GRD ' + (i % 2 ? 'ASC' : 'DESC') + ' ' + d, value: (d > '2026-07-29' && d < '2026-08-15' ? -20.5 : -17.5) + (i % 3) * 0.1, valid: 100 };
+});
+t('seuranta: NDVI-pudotus trendiin nähden → vihreä, luotettavuus korkea, päivittäinen tulos', () => {
+  const m = C.monitor(s2mow.concat(s1vh), { measure: 'Luonnonhoitonurmi', start: '2026-07-01', end: '2026-09-16' });
+  assert.strictEqual(m.light, 'green');
+  assert.strictEqual(m.reliability, 'Korkea');
+  assert.deepStrictEqual([m.event.start, m.event.end], ['2026-07-26', '2026-07-29'], 'tutka rajaa alun 26.7.');
+  assert.ok(m.event.fams.includes('S1B'), 'tutkan VH-lasku yhdistyy samaan tapahtumaan');
+  assert.strictEqual(m.coverage.katve.length, 0);
+  assert.strictEqual(m.firstGreen, '2026-07-29');
+  assert.strictEqual(m.history[0].light, 'yellow');
+  assert.deepStrictEqual(m.daily.map((s) => s.state), ['seurannassa', 'niitto', 'niitetty']);
+  assert.ok(m.signals.some((s) => /NDVI 0,52 alle trendin/.test(s.text)));
+  assert.ok(m.signals.some((s) => s.fam === 'S1B' && /dB/.test(s.text)));
+});
+t('seuranta: tutka yksin jää keltaiseksi (luottamus ≤ 0,4)', () => {
+  const m = C.monitor(s1vh, { measure: 'Luonnonhoitonurmi' });
+  assert.strictEqual(m.light, 'yellow');
+  assert.strictEqual(m.label, 'Mahdollinen niitto, ei varmistettu');
+  assert.ok(m.maybe.conf <= 0.4);
+});
+t('seuranta: hidas tuleentuminen ei laukaise trendi-ilmaisinta', () => {
+  const slow = Array.from({ length: 23 }, (_, i) => ({ date: day('2026-07-01', i * 4), src: 'Sentinel-2', value: 0.82 - Math.max(0, i - 3) * 0.025, valid: 90 }));
+  const m = C.monitor(slow, { measure: 'Luonnonhoitonurmi' });
+  assert.strictEqual(m.signals.length, 0);
+  assert.strictEqual(m.light, 'red', 'kuvattu tiheästi määräpäivän yli → niittoa ei havaittu');
+  assert.strictEqual(m.reliability, 'Korkea');
+});
+t('seuranta: katvejakso → keltainen "Ei voitu todeta" ja katve nimetään', () => {
+  const obs = s2mow.filter((o) => o.date < '2026-07-20' || o.date > '2026-08-20').map((o) => Object.assign({}, o, { value: o.date > '2026-08-20' ? 0.80 : o.value }));
+  const m = C.monitor(obs, { measure: 'Luonnonhoitonurmi', end: '2026-09-16' });
+  assert.strictEqual(m.light, 'yellow');
+  assert.strictEqual(m.label, 'Ei voitu todeta');
+  assert.strictEqual(m.coverage.katve.length, 1);
+  assert.match(m.why[0], /katvejaksoja.*17\.7\.2026–22\.8\.2026 \(36 vrk\)/);
+  assert.ok(m.daily.some((s) => s.state === 'katve'));
+});
+t('seuranta: myöhäinen niitto → punainen, ehto ei täyty', () => {
+  const late = s2mow.map((o) => Object.assign({}, o, { date: day(o.date, 60) }));
+  const m = C.monitor(late, { measure: 'Luonnonhoitonurmi' });
+  assert.strictEqual(m.light, 'red');
+  assert.match(m.label, /ehto ei täyty/);
+});
+t('seuranta: lähteiden rinnakkaisvertailu, Ruokaviraston aineisto perustasona', () => {
+  const ps = s2mow.map((o) => Object.assign({}, o, { src: 'PlanetScope', id: 'PS ' + o.id, value: o.value + 0.02 }));
+  const hls = s2mow.map((o) => Object.assign({}, o, { src: 'HLS-S30', id: 'HLS ' + o.id }));
+  const r = C.monitorCompare(s2mow.concat(s1vh, ps, hls), { measure: 'Luonnonhoitonurmi' });
+  assert.deepStrictEqual(r.rows.map((x) => x.key), ['RV', 'S2', 'S1', 'HLS', 'PS', 'ALL']);
+  assert.strictEqual(r.summary.base, 'RV');
+  assert.strictEqual(r.rows.find((x) => x.key === 'S1').light, 'yellow');
+  assert.ok(r.rows.filter((x) => x.key !== 'S1').every((x) => x.light === 'green'));
+  assert.match(r.summary.text[0], /Ruokaviraston tapaan\): vihreä/);
+  const noRadar = C.monitorCompare(s2mow.concat(ps), {});
+  assert.deepStrictEqual(noRadar.rows.map((x) => x.key), ['S2', 'PS']);
+  assert.strictEqual(noRadar.rows[1].label, 'PlanetScope');
+});
+t('Sentinel-1 VH: tunnistus pääanalyysissa vain tukena, raja-arvot ja geometria', () => {
+  const res = C.analyze(s1vh, {});
+  assert.strictEqual(res.best, null, 'tutka yksin ei ylitä todennäköisyysrajaa');
+  assert.ok(res.events.length >= 1 && res.events.every((e) => e.conf <= 0.4));
+  const bad = C.analyze([{ date: '2026-07-01', src: 'Sentinel-1 VH', value: -55 }], {});
+  assert.match(bad.excluded[0].reason, /−40…10 dB/);
+  const d = C._s1bDetect(s1vh.map((o) => Object.assign({}, o, { id: 'x' })), {});
+  assert.ok(d.acc.every((x) => x.track === 'kaikki'));
+});
+t('seuranta: ilman kahta selkeää kuvaa määräpäivän jälkeen ei voi todeta niiton puuttumista', () => {
+  const flat = Array.from({ length: 20 }, (_, i) => ({ date: day('2026-07-01', i * 4), src: 'Sentinel-2', value: 0.8, valid: 90 }));
+  const m = C.monitor(flat, { measure: 'Luonnonhoitonurmi' });
+  assert.strictEqual(m.light, 'yellow');
+  assert.match(m.why[0], /jälkeen 0 selkeää kuvaa; tarvitaan vähintään 2/);
+});
+console.log('seurantatestit läpi');
+
+// ---------- Korjausehdotukset: uskottavuus, palautuminen, määräpäivän jälkeiset kuvat, 0 % havainnot, HLS+L2A ----------
+t('uskottavuusraja: alle 0,2 pudotus merkitään epävarmaksi ja luottamus laskee', () => {
+  const obs = [0.80, 0.81, 0.80, 0.64, 0.62, 0.66, 0.70].map((v, i) => ({ date: day('2026-07-01', i * 5), src: 'Sentinel-2', value: v, valid: 100, changed: 95 }));
+  const r = C.analyze(obs, {});
+  const d = r.events[0].dets[0];
+  assert.ok(d.notes.some((n) => /alle nurmen niitolle tyypillisen 0,2/.test(n)));
+  assert.ok(r.events[0].conf < 0.6, 'yksin ei ylitä rajaa');
+});
+t('palautuminen: nopea paluu (> 0,03/vrk) hylätään, asteittainen hyväksytään', () => {
+  const fast = [0.80, 0.80, 0.45, 0.58, 0.62].map((v, i) => ({ date: day('2026-07-01', [0, 5, 10, 13, 18][i]), src: 'Sentinel-2', value: v, valid: 100 }));
+  const r = C.analyze(fast, {});
+  assert.strictEqual(r.events.length, 0);
+  assert.match(r.rejected[0].reason, /nopeammin kuin nurmi kasvaa/);
+  const slowR = [0.80, 0.80, 0.45, 0.50, 0.58].map((v, i) => ({ date: day('2026-07-01', [0, 5, 10, 15, 20][i]), src: 'Sentinel-2', value: v, valid: 100 }));
+  assert.strictEqual(C.analyze(slowR, {}).events[0].dets[0].persistence, 'pysyvä');
+});
+t('määräpäivä: niitto juuri ennen 15.9. ilman kuvia sen jälkeen → huomautus', () => {
+  const obs = [['2026-09-01', 0.8], ['2026-09-06', 0.8], ['2026-09-12', 0.45]].map(([d, v]) => ({ date: d, src: 'Sentinel-2', value: v, valid: 100, changed: 95 }));
+  const r = C.analyze(obs, { measure: 'Luonnonhoitonurmi' });
+  assert.ok(r.best.checks.some((c) => c.s === 'warn' && /ei yhtään selkeää kuvaa: jatka hakujaksoa/.test(c.t)));
+  assert.strictEqual(r.post.n, 0);
+});
+t('0 % kelvollisia: havainto näkyy pois jätettyjen listassa', () => {
+  const r = C.analyze([{ date: '2026-07-01', src: 'HLS-S30', id: 'HLS.S30.x', value: null, valid: 0 }, { date: '2026-07-05', src: 'HLS-S30', value: 0.8, valid: 100 }], {});
+  assert.strictEqual(r.excluded.length, 1);
+  assert.match(r.excluded[0].reason, /ei kelvollisia pikseleitä \(0 %\)/);
+});
+t('HLS + L2A: L2A täyttää puuttuvat granulit, ristiriitaiset maskit merkitään', () => {
+  const obs = [
+    { date: '2026-07-01', src: 'HLS-S30', value: 0.80, valid: 100 },
+    { date: '2026-07-01', src: 'Sentinel-2', value: 0.81, valid: 100 },
+    { date: '2026-07-04', src: 'Sentinel-2', value: 0.80, valid: 98 },          // HLS-granuli puuttuu → täyttö
+    { date: '2026-07-09', src: 'HLS-S30', value: null, valid: 0 },              // Fmask hylkää,
+    { date: '2026-07-09', src: 'Sentinel-2', value: 0.44, valid: 97 },          // SCL selkeä → ristiriita
+    { date: '2026-07-12', src: 'HLS-L30', value: 0.47, valid: 90 },
+    { date: '2026-07-14', src: 'HLS-S30', value: 0.50, valid: 92 },
+    { date: '2026-07-14', src: 'Sentinel-2', value: 0.51, valid: 20 }           // SCL hylkää → ristiriita
+  ];
+  const f = C.fuse(obs, {});
+  assert.deepStrictEqual(f.info, { filled: 2, conflicts: 2, mode: 'HLS + L2A' });
+  assert.deepStrictEqual(f.obs.map((o) => o.src), ['HLS-S30', 'Sentinel-2 L2A (HLS-täydennys)', 'Sentinel-2 L2A (HLS-täydennys)', 'HLS-L30', 'HLS-S30']);
+  assert.match(f.obs[2].conflict, /L2A SCL selkeä, HLS Fmask hylkää/);
+  const r = C.analyze(f.obs, {});
+  assert.deepStrictEqual(r.used.map((o) => o.fam), ['HLS', 'HLS', 'HLS', 'HLS', 'HLS'], 'täydennys samassa sarjassa');
+  assert.ok(r.events[0].dets[0].notes.some((n) => /maskit ristiriidassa/.test(n)));
+  assert.strictEqual(C.fuse(obs.filter((o) => o.src === 'Sentinel-2'), {}).obs.length, 4, 'ilman HLS:ää L2A sellaisenaan');
+});
+console.log('korjaustestit läpi');

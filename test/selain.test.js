@@ -129,10 +129,54 @@ const item = (id, c, d, p, nir, e) => ({ id, collection: c, properties: { dateti
   const cmp = await page.$$eval('#cmpTable tbody tr td:first-child', (td) => td.map((x) => x.textContent));
   assert.deepStrictEqual(cmp, ['Sentinel-2 L2A', 'HLS ilman Landsatia (S30)', 'HLS (Sentinel-2 + Landsat)', 'PlanetScope', 'Sentinel-2 + PlanetScope', 'HLS + PlanetScope']);
   assert.match(await page.textContent('#cmpSummary'), /Sentinel-2 L2A: niittoväli 10\.7\.2026–17\.8\.2026 \(38 vrk\)/);
-  assert.match(await page.textContent('#checks'), /Sentinel-2 L2A on mukana vain lähdevertailussa/);
+  assert.match(await page.textContent('#checks'), /HLS ja Sentinel-2 L2A yhdistettiin päivämäärittäin: L2A täytti 1 päivää/);
   assert.ok(!/Sentinel-2/.test(await page.textContent('#verdict')), 'pääarvio ei laske Sentinel-2:ta erilliseksi lähteeksi');
   const rep = await page.evaluate(() => { let o = null; const real = URL.createObjectURL; URL.createObjectURL = (b) => { o = b; return real.call(URL, b); }; document.getElementById('dlJson').click(); URL.createObjectURL = real; return o && o.text(); });
   assert.ok(JSON.parse(rep).lahdevertailu.rivit.length === 6, 'vertailu raportissa');
+  assert.strictEqual(JSON.parse(rep).yhdistaminen.l2a_taydennyksia, 1);
+  // Ruokaviraston kaltainen seuranta ilman tutkaa
+  assert.ok(await page.isVisible('#rvCard'));
+  assert.deepStrictEqual(await page.$$eval('#rvTable tbody tr td:first-child', (td) => td.map((x) => x.textContent)), ['Pelkkä Sentinel-2', 'HLS (Sentinel-2 + Landsat)', 'PlanetScope']);
+  // Sentinel-1 Copernicus Data Spacesta (mock)
+  const cdse = [];
+  await page.route('https://identity.dataspace.copernicus.eu/**', (route) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'POST' } });
+    cdse.push(route.request().postData()); return J(route, { access_token: 'a.' + Buffer.from(JSON.stringify({ exp: Date.now() / 1000 + 600 })).toString('base64url') + '.c' });
+  });
+  await page.route('https://sh.dataspace.copernicus.eu/**', (route) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'POST' } });
+    const b = JSON.parse(route.request().postData()), asc = b.input.data[0].dataFilter.orbitDirection === 'ASCENDING';
+    const st = (m) => ({ stats: { mean: m, sampleCount: 600, noDataCount: 0 } });
+    const data = [];
+    for (let i = 0; i < 10; i++) {
+      const d = new Date(Date.parse(asc ? '2026-07-02' : '2026-07-05') + i * 6 * 864e5).toISOString().slice(0, 10);
+      const vh = d > '2026-07-29' && d < '2026-08-25' ? 0.009 : 0.018;
+      data.push({ interval: { from: d + 'T00:00:00Z', to: d + 'T23:59:59Z' }, outputs: { s1: { bands: { B0: st(0.09), B1: st(vh * (1 + (i % 3) * 0.02)) } } } });
+    }
+    return J(route, { data });
+  });
+  await page.click('#stepNav button[data-step="2"]');
+  await page.check('#s1On');
+  assert.ok(await page.isVisible('#cdseId'), 'tunnuskentät aukeavat');
+  await page.fill('#cdseId', 'sh-test'); await page.fill('#cdseSecret', 'salainen');
+  await page.click('#runGo');
+  await page.waitForFunction(() => /Sentinel-1: 20 havaintoa/.test(document.getElementById('fetchLog').textContent), null, { timeout: 20000 });
+  assert.match(cdse[0], /client_id=sh-test&client_secret=salainen/);
+  const srcs4 = await page.$$eval('#obsTable tbody tr .s', (s) => s.map((x) => x.value));
+  assert.strictEqual(srcs4.filter((s) => s === 'Sentinel-1 VH').length, 20);
+  const rvRows = await page.$$eval('#rvTable tbody tr td:first-child', (td) => td.map((x) => x.textContent));
+  assert.deepStrictEqual(rvRows, ['Sentinel-2 + Sentinel-1 (Ruokaviraston tapaan)', 'Pelkkä Sentinel-2', 'Pelkkä Sentinel-1', 'HLS (Sentinel-2 + Landsat) + Sentinel-1', 'PlanetScope + Sentinel-1', 'Kaikki lähteet']);
+  assert.match(await page.textContent('#rvMain'), /luotettavuus (korkea|keskitaso|matala)/);
+  assert.match(await page.textContent('#rvSignals'), /VH-takaisinsironta laski/);
+  assert.ok(await page.$('#rvTimeline .tline i'), 'aikajana');
+  assert.match(await page.textContent('#chart'), /VH dB/);
+  const rep2 = await page.evaluate(() => { let o = null; const real = URL.createObjectURL; URL.createObjectURL = (b) => { o = b; return real.call(URL, b); }; document.getElementById('dlJson').click(); URL.createObjectURL = real; return o && o.text(); });
+  assert.ok(!/salainen/.test(rep2), 'tunnus ei päädy raporttiin');
+  assert.strictEqual(JSON.parse(rep2).seuranta.perustaso, 'RV');
+  assert.strictEqual(await page.textContent('#exBadge'), '', 'esimerkkimerkintä ei näy oikealla datalla');
+  await page.screenshot({ path: path.join(process.env.SHOT_DIR || require('os').tmpdir(), 'selain_seuranta.png'), fullPage: true });
+  await page.evaluate(() => { document.getElementById('s1On').checked = false; });
+  console.log('ok Sentinel-1 (CDSE) ja Ruokaviraston kaltainen seuranta');
   // vain Sentinel-2: HLS-rivit poistuvat
   await page.click('#stepNav button[data-step="2"]');
   await page.check('#srcS2'); await page.click('#runGo');

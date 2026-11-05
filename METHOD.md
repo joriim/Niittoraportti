@@ -1,6 +1,6 @@
 # Niittoraportti – menetelmäkuvaus
 
-Versio 2.0.0 · 1.11.2026 · koodi: [`core.js`](core.js), [`datahaku.js`](datahaku.js) · testit: [`test/`](test/)
+Versio 2.2.0 · 5.11.2026 · koodi: [`core.js`](core.js), [`datahaku.js`](datahaku.js) · testit: [`test/`](test/)
 
 ## Tarkoitus
 
@@ -23,11 +23,11 @@ Käyttäjä syöttää yhden rivin havaintoa kohden.
 
 | Kenttä | Optiset lähteet | Sentinel-1 |
 | --- | --- | --- |
-| Päivä | kuvauspäivä | koherenssiparin jälkimmäinen päivä |
-| Lähde | HLS-S30, HLS-L30, Sentinel-2, PlanetScope | Sentinel-1 koherenssi |
-| Kuvatunniste | HLS granule id / PlanetScope item id | kuvaparin tunniste |
-| Arvo | lohkon NDVI-mediaani | lohkon VH-koherenssin keskiarvo |
-| Kelvolliset % | pilvettömien pikselien osuus (HLS: Fmask, Sentinel-2: SCL, PlanetScope: UDM2 clear) | – |
+| Päivä | kuvauspäivä | kuvauspäivä (VH) tai koherenssiparin jälkimmäinen päivä |
+| Lähde | HLS-S30, HLS-L30, Sentinel-2, PlanetScope | Sentinel-1 VH, Sentinel-1 koherenssi |
+| Kuvatunniste | HLS granule id / PlanetScope item id | `S1 GRD ASC\|DESC päivä VV x dB` tai kuvaparin tunniste; ASC/DESC tai `rata N` erottaa kuvausgeometriat |
+| Arvo | lohkon NDVI-mediaani; tyhjä, jos kelvollisia pikseleitä ei ole | VH-takaisinsironta γ⁰ dB / VH-koherenssin keskiarvo |
+| Kelvolliset % | pilvettömien pikselien osuus (HLS: Fmask, Sentinel-2: SCL + sininen kanava, PlanetScope: UDM2 clear); 0 % -rivit näytetään pois jätettyinä | VH: pikselit, joilla on dataa |
 | Muuttunut % | pikselien osuus, joissa NDVI laski ≥ kynnyksen edellisestä havainnosta | – |
 
 Havainnot voi syöttää käsin, tuoda CSV:nä tai hakea työkalun datahaulla (ks. alla). Lohko kutistetaan ennen laskentaa reunapuskurin verran (oletus 10 m), koska kutistettu lohko parantaa tunnistusta [L4] ja Sen4CAP käyttää vain kokonaan lohkon sisällä olevia pikseleitä [L2].
@@ -48,9 +48,17 @@ Pikselitason laskennan tekevät selaimessa [`datahaku.js`](datahaku.js) ja komen
 | Muuttunut % | osuus kelvollisista pikseleistä, joissa NDVI laski ≥ kynnyksen (oletus 0,12) verrattuna edelliseen saman perheen havaintoon, jossa kelvollisia oli ≥ raja (oletus 50 %). Vertailu tehdään pikselin keskipisteen kohdalta edellisen kuvan ruudukossa, tarvittaessa koordinaatistomuunnoksen kautta. Arvo jätetään tyhjäksi, jos verrattavia pikseleitä on alle puolet. | sama |
 | Saman päivän kuvat | pidetään kuva, jossa on eniten kelvollisia pikseleitä | sama |
 
-**Sentinel-2 L2A ilman HLS:ää.** Sovellus hakee myös ESA:n Sentinel-2 L2A -kuvat Planetary Computerista (`sentinel-2-l2a`, ei tunnusta). NDVI lasketaan 10 metrin kaistoista (B08 − B04)/(B08 + B04). Pilvet poistetaan Scene Classification -kerroksella (SCL, 20 m): kelvollisia ovat luokat 4 kasvillisuus, 5 paljas maa ja 6 vesi. Jokaiselle 10 m pikselille haetaan sen 20 m SCL-solu. Prosessointiversiosta 04.00 alkaen (25.1.2022) heijastusarvoista vähennetään siirtymä 1000 ennen NDVI:n laskemista. Lohkon pikselit, muuttunut osuus ja saman päivän valinta lasketaan kuten HLS:lle. Sentinel-2 on oma sensoriperheensä (S2).
+**Sentinel-2 L2A ilman HLS:ää.** Sovellus hakee myös ESA:n Sentinel-2 L2A -kuvat Planetary Computerista (`sentinel-2-l2a`, ei tunnusta). NDVI lasketaan 10 metrin kaistoista (B08 − B04)/(B08 + B04). Pilvet poistetaan Scene Classification -kerroksella (SCL, 20 m): kelvollisia ovat luokat 4 kasvillisuus ja 5 paljas maa. Luokka 6 (vesi) hylätään, koska pellolla se on yleensä pilven varjo tai usva. Lisäksi hylätään pikselit, joiden sininen heijastus (B02) on yli 0,10, mikä poistaa ohuen pilven ja usvan, jota SCL ei tunnista. Pilvitodennäköisyyskerrosta (MSK_CLDPRB) Planetary Computerissa ei ole. Jokaiselle 10 m pikselille haetaan sen 20 m SCL-solu. Prosessointiversiosta 04.00 alkaen (25.1.2022) heijastusarvoista vähennetään siirtymä 1000 ennen NDVI:n laskemista. Lohkon pikselit, muuttunut osuus ja saman päivän valinta lasketaan kuten HLS:lle. Sentinel-2 on oma sensoriperheensä (S2).
 
-Sentinel-2 L2A ja HLS S30 perustuvat samoihin kuviin. Pääarvio käyttää siksi HLS:ää, kun molemmat on haettu, eikä laske niitä toisistaan riippumattomiksi lähteiksi. Sentinel-2 on silloin mukana vain lähdevertailussa.
+**HLS:n ja L2A:n yhdistäminen** (`core.fuse`). Sentinel-2 L2A ja HLS S30 perustuvat samoihin kuviin, joten niitä ei lasketa toisistaan riippumattomiksi lähteiksi. Kun molemmat on haettu, ne yhdistetään päivämäärittäin yhdeksi sarjaksi (perhe HLS):
+
+- HLS (S30 + L30) on pääsarja. L2A täyttää päivät, joilta HLS-S30-granuli puuttuu tai on maskin hylkäämä.
+- Jos saman päivän maskit ovat ristiriidassa (toinen hylkää kuvan pilvenä, toinen pitää sitä selkeänä) tai arvot poikkeavat yli 0,15, havainto merkitään epävarmaksi. Pudotus, jonka toisena päänä on epävarma havainto, saa huomautuksen ja luottamus kerrotaan 0,85:llä.
+- Ilman HLS-havaintoja L2A on pääsarja sellaisenaan.
+
+**Sentinel-1 VH-takaisinsironta.** Sovellus hakee Sentinel-1 GRD -kuvien maastokorjatun takaisinsironnan (γ⁰, `GAMMA0_TERRAIN`, Copernicus DEM 30 m) Copernicus Data Space Ecosystemin Statistical API:sta lohkon keskiarvona kuvauspäivittäin (`P1D`). Nousevat ja laskevat radat haetaan erikseen. Arvo muunnetaan desibeleiksi: 10·log₁₀(VH). Haku vaatii maksuttoman CDSE OAuth -asiakkaan. Jos selain ei saa kutsua suoraan, se kulkee välityspalvelimen polkujen `/cdse/token` ja `/cdse/statistics` kautta. Ruokaviraston käyttämää 12 vrk koherenssia CDSE ei laske. Itse laskettuna (esim. ASF HyP3) sen voi tuoda CSV:nä.
+
+**Määräpäivän yli.** Oletusjakso päättyy 15.10., jotta 15.9. jälkeen saadaan 1–2 selkeää kuvaa. Niiton puuttumista ei todeta, jos määräpäivän jälkeen on alle 2 selkeää kuvaa, ja määräpäivää lähellä olevaan niittoon tulee huomautus.
 
 Datahaussa lohkon rajaus lähetetään hakupalveluun. Planet-API-avain on vain selaimen muistissa (valinnaisesti välilehden istuntomuistissa), eikä sitä tallenneta raporttiin. Jos Planet ei salli kutsua selaimesta (CORS), käytetään skriptiä.
 
@@ -62,14 +70,33 @@ Datahaussa lohkon rajaus lähetetään hakupalveluun. Planet-API-avain on vain s
 | 2 | Sensoriperheet | Ilmaisin ajetaan erikseen HLS-, S2-, PlanetScope- ja S1-sarjoille. HLS S30 ja L30 ovat yksi sarja. | – | HLS-harmonisointi [L1]; PlanetScopen ja S2:n kaistaerot [L6] |
 | 3 | Optinen ilmaisin | Pudotus edelliseen saman perheen havaintoon on vähintään kynnyksen suuruinen | 0,12 | pohjoisten maiden kynnys [L2] |
 | 3b | Väli | Enimmäisväli kahden havainnon välillä | 60 vrk | Δt<sub>max</sub> [L2] |
-| 4 | Pysyvyys | Jos seuraava ≤ 10 vrk:n sisällä oleva havainto palaa alle puolen kynnyksen päähän lähtötasosta (c > ennen − kynnys/2), pudotus hylätään pilvenä tai varjona. Jos havaintoa ei ole, luottamus kerrotaan 0,85:llä. | 10 vrk | Ruokaviraston pysyvyysperiaate [R5]; ikkuna oma |
+| 4 | Pysyvyys | Seuraavan ≤ 10 vrk:n sisällä olevan havainnon on pysyttävä matalana tai palauduttava asteittain. Pudotus hylätään pilvenä tai varjona, jos havainto palaa alle puolen kynnyksen päähän lähtötasosta (c > ennen − kynnys/2) tai NDVI nousee yli 0,03/vrk. Jos havaintoa ei ole, luottamus kerrotaan 0,85:llä. | 10 vrk, 0,03/vrk | Ruokaviraston pysyvyysperiaate [R5]; ikkuna ja nopeus omia |
+| 4c | Uskottavuus | Nurmen niitto laskee NDVI:tä tyypillisesti ≥ 0,2. Pienempi pudotus saa huomautuksen ja luottamus kerrotaan 0,8:lla, joten se ei yksin ylitä rajaa. | 0,2 | oma |
+| 4d | Määräpäivä | Jos niitto päättyy alle 21 vrk ennen määräpäivää ja määräpäivän jälkeen on alle 2 selkeää kuvaa, tulee huomautus | 2 kuvaa | oma |
 | 4b | Hidas muutos | Yli 14 vrk:n välillä luottamus kerrotaan 0,9:llä (tuleentuminen tai kuivuus mahdollinen) | 14 vrk | oma |
+| 5b | Tutka, takaisinsironta | VH (dB) laskee saman kuvausgeometrian (ASC/DESC) kuuden edellisen arvon lineaarisovitteesta vähintään 1 dB ja 2σ (σ ≥ 0,5 dB); vähintään 3 aiempaa arvoa. Luottamus 0,2–0,4. | 1 dB, 2σ | niitto vähentää tilavuussirontaa; kynnykset omia |
 | 5 | Tutkailmaisin | VH-koherenssi ylittää kuuden edellisen arvon lineaarisovitteen ennusteen (hetkelle t−1) kσ:lla; vähintään 4 aiempaa arvoa | k = 5,0 | CFAR, P<sub>fa</sub> = 3·10⁻⁷ [L2]; koherenssi nousee niiton jälkeen [L5] |
 | 6 | Luottamus | Optinen: 0,5 + 0,5·min(1, (pudotus − kynnys)/0,25). Tutka: 0,25 + 0,25·min(1, (z − k)/k). | – | asteikot optinen 0,5–1, tutka 0–0,5 [L2]; kaava oma |
 | 7 | Yhdistäminen | Päällekkäiset tunnistukset yhdistetään ja väli tarkennetaan leikkaukseen. Jokainen uusi sensoriperhe lisää luottamusta 0,15·(c/0,5). | – | S1+S2-yhdistäminen [L2]; lisäys oma |
 | 8 | Tapahtumat | Alle 28 vrk:n päässä toisistaan olevista pidetään varmempi; enintään 4 | 28 vrk, 4 | Δt<sub>min</sub> ja enimmäismäärä [L2] |
 | 9 | Todennäköisyysraja | Tapahtuma hyväksytään, kun luottamus ≥ raja. Tutka yksin (≤ 0,5) ei riitä. | 0,6 | oma; vrt. status-kohtainen raja [R5] |
 | 10 | Tukiehto | Niittoväliä verrataan toimenpiteen päivämääriin, ja suurimman muuttuneen osuuden on oltava ≥ raja | 90 % | päivämäärät [R4]; osuus oma |
+
+### Ruokaviraston kaltainen seuranta (`core.monitor`)
+
+Ruokaviraston ja CGI:n julkisten kuvausten mukaan seuranta käyttää Sentinel-1:n takaisinsirontaa ja koherenssia (12 vrk välein) sekä Sentinel-2:n NDVI:tä (2–4 vrk välein, 10 m). Lohkon aikasarjasta etsitään NDVI:n pudotusta, joka on riittävä suhteessa trendiin. Tulos lasketaan päivittäin ja annetaan liikennevalona luotettavuustason kanssa [R5][R6]. Koneoppimismallia ei ole julkaistu, joten Niittoraportti toteuttaa rakenteen avoimilla säännöillä:
+
+| Vaihe | Sääntö |
+| --- | --- |
+| Trendi | Kunkin havainnon kohdalla sovitetaan suora saman perheen edellisen 30 vrk:n havaintoihin (≥ 3). Sitä jatketaan enintään 10 vrk viimeisestä havainnosta, ja se rajataan aiempien arvojen maksimiin. Alle kolmella havainnolla verrataan edelliseen. |
+| Signaali | Pudotus trendistä ≥ max(0,12; 2σ), σ ≥ 0,03. Pysyvyys, palautumisnopeus, uskottavuus ja maskiristiriidat kuten yllä. Hidas lasku (tuleentuminen) siirtää trendiä eikä laukaise ilmaisinta. |
+| Tutka | VH-takaisinsironta ja koherenssi kuten vaiheet 5 ja 5b; tukevat ja tarkentavat optista tapahtumaa. Tutka yksin jää keltaiseksi. |
+| Katve | Optinen väli > 14 vrk määräpäivään asti: niitto voi jäädä näkemättä, koska nurmi ehtii vihertyä. |
+| Liikennevalo | **Vihreä**: hyväksytty niitto täyttää ehdon. **Punainen**: niitto ehdon vastainen, tai lohko kuvattiin koko jakson ajan ilman katvetta ja ≥ 2 selkeää kuvaa määräpäivän jälkeen eikä niittoa näkynyt. **Keltainen**: mahdollinen niitto alle rajan, katvejakso, ei optisia kuvia tai jakso kesken. |
+| Luotettavuus | Vihreä: **korkea**, kun luottamus ≥ 0,8, pysyvyys varmistettu tai useampi lähde, eikä ajoitushuomautusta; **matala**, kun ajoitus epävarma tai luottamus < 0,7; muuten keskitaso. Punainen ilman niittoa: korkea, kun pisin väli ≤ 10 vrk, muuten keskitaso. Keltainen: matala. |
+| Päivittäin | Luokitus lasketaan jokaisen havaintopäivän tiedoilla, ja muutokset näytetään (esim. 1.8. keltainen → 17.8. vihreä). Aikajana näyttää jaksot seurannassa, katve, niitto ja niitetty. |
+
+Sama seuranta ajetaan rinnakkain: Sentinel-2 + Sentinel-1 (perustaso, Ruokaviraston aineisto), pelkkä Sentinel-2, pelkkä Sentinel-1, HLS + Sentinel-1, PlanetScope + Sentinel-1 ja kaikki lähteet. Taulukosta näkyy, missä lähteessä niitto näkyi aiemmin, millä luotettavuudella ja kuinka paljon katvetta jäi.
 
 ### Lähdevertailu
 
@@ -115,7 +142,8 @@ Joka toisen vuoden vaatimusta ja kasvuston säilyttämisajan päivämääriä ei
 
 - Sen4CAP-menetelmän paras F1 oli 76 % kuuden maan Planet-validoinnissa. Wallonian maastovalidoinnissa laidunnus aiheutti suuren osan vääristä tunnistuksista, ja pelkillä niitetyillä lohkoilla F1 oli 79 % [L2]. Optisilla aikasarjoilla on tavoitettu 77 % niitoista [L4], ja yhden niiton lohkoilla puuttuvia tunnistuksia on ollut paljon [L3].
 - Omia raja-arvoja (merkitty "oma") ei ole kalibroitu Suomen maastoaineistolla. Ne pitää testata pilotissa, esimerkiksi Ruokaviraston laadunarvioinnin maastoaineistoa vasten.
-- Sade alentaa koherenssia ja voi peittää niiton [L5].
+- Sade alentaa koherenssia ja voi peittää niiton [L5]. Sade ja maan kosteus muuttavat myös takaisinsirontaa, joten VH-signaali on vain tukinäyttöä.
+- Ruokaviraston seurannan koneoppimismalli, sen raja-arvot ja liikennevalojen tarkat määritelmät eivät ole julkisia. Ruokaviraston kaltainen seuranta jäljittelee rakennetta, ei mallia.
 - Laidunnus ja niitto erottuvat huonosti.
 - Työkalu luottaa käyttäjän syöttämiin NDVI- ja osuuslukuihin. Toistettavuus perustuu siihen, että tunnisteet ja parametrit raportoidaan.
 - Datahaku on testattu synteettisillä kuvilla ja mockatuilla rajapinnoilla, ei vielä oikeita palveluita vasten. Ensimmäiset oikeat haut kannattaa tarkistaa käsin, esimerkiksi vertaamalla yhden kuvan NDVI-mediaania QGIS:ssä laskettuun.
@@ -136,10 +164,12 @@ Joka toisen vuoden vaatimusta ja kasvuston säilyttämisajan päivämääriä ei
 - kaksi niittoa ≥ 28 vrk välein
 - raporttitekstin muotoilu
 - tukihavaintojen huomautukset vahvassa tapahtumassa
+- Ruokaviraston kaltainen seuranta: trendipudotus, tutka yksin, tuleentuminen, katve, myöhäinen niitto, määräpäivän jälkeiset kuvat, lähteiden rinnakkaisvertailu
+- uskottavuusraja, palautumisnopeus, 0 % havainnot ja HLS + L2A -yhdistäminen
 
 Datahaun testit (`npm install` kerran):
 
-- `node test/datahaku.test.js`: projektio (verrattu pyprojiin), lohkon luku, Fmask, reunapuskuri, HLS- ja PlanetScope-ketju mockatuilla rajapinnoilla
+- `node test/datahaku.test.js`: projektio (verrattu pyprojiin), lohkon luku, Fmask, reunapuskuri, HLS-, Sentinel-2- (SCL ja sininen kanava), Sentinel-1- (CDSE) ja PlanetScope-ketju mockatuilla rajapinnoilla
 - `python test/test_hae_havainnot.py`: skriptin laskenta samoilla kuvilla; tulosten on oltava samat kuin selaimessa
 - `node test/selain.test.js`: käyttöliittymä Chromiumissa (vaatii Playwrightin)
 - Testikuvat tuotetaan skriptillä `test/fixtures/make_fixtures.py`.

@@ -53,3 +53,27 @@ rivit = out.read_text(encoding="utf-8").splitlines()
 out.unlink()
 assert rivit[0].startswith("#") and rivit[3] == "2026-08-05;HLS-S30;k3;0.450;100;94", rivit
 print("ok CSV-muoto")
+
+# 0 % kelvollisia: rivi säilyy tyhjällä NDVI:llä
+tyhja = dict(raaka[0], pvm="2026-07-01", id="k0", arvo=None, n=0)
+v = H.viimeistele([tyhja] + raaka, a)
+assert (v[0]["pvm"], v[0]["arvo"], v[0]["kelvolliset"]) == ("2026-07-01", None, 0), v[0]
+print("ok 0 % havainto säilyy")
+
+# Sentinel-1: sama muunnos kuin datahaku.js:ssä
+st = lambda m, n, nd: {"stats": {"mean": m, "sampleCount": n, "noDataCount": nd}}
+js = {"data": [
+    {"interval": {"from": "2026-07-02T00:00:00Z"}, "outputs": {"s1": {"bands": {"B0": st(0.1, 100, 0), "B1": st(0.02, 100, 0)}}}},
+    {"interval": {"from": "2026-07-03T00:00:00Z"}, "outputs": {"s1": {"bands": {"B0": st("NaN", 100, 100), "B1": st("NaN", 100, 100)}}}},
+    {"interval": {"from": "2026-07-08T00:00:00Z"}, "outputs": {"s1": {"bands": {"B0": st(0.1, 100, 70), "B1": st(0.02, 100, 70)}}}},
+]}
+s1 = H.s1_jasenna(js, "ASCENDING")
+assert [(o["pvm"], o["arvo"], o["kelvolliset"], o["id"]) for o in s1] == [("2026-07-02", -16.99, 100, "S1 GRD ASC 2026-07-02 VV -10.00 dB")], s1
+req = H.s1_pyynto(lohko, "2026-07-01", "2026-07-31", "DESCENDING")
+assert req["input"]["data"][0]["processing"]["backCoeff"] == "GAMMA0_TERRAIN"
+assert req["input"]["bounds"]["properties"]["crs"].startswith("http://www.opengis.net/def/crs/EPSG/0/326")
+out = D / "_s1.csv"
+H.kirjoita(s1 + [v[0]], out)
+r = out.read_text(encoding="utf-8").splitlines(); out.unlink()
+assert r[1] == "2026-07-02;Sentinel-1 VH;S1 GRD ASC 2026-07-02 VV -10.00 dB;-16.99;100;" and r[2] == "2026-07-01;HLS-S30;k0;;0;", r
+print("ok Sentinel-1")

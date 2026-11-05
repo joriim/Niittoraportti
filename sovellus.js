@@ -86,7 +86,7 @@
   function addRow(d){
     d=d||{};
     var tr=document.createElement('tr');
-    var opts=C.SOURCES.map(function(s){return '<option'+(s===d.src?' selected':'')+'>'+s+'</option>'}).join('');
+    var opts=C.SOURCES.filter(function(s){return s.indexOf('täydennys')<0}).map(function(s){return '<option'+(s===d.src?' selected':'')+'>'+s+'</option>'}).join('');
     tr.innerHTML='<td><input type="date" class="d" aria-label="Päivä" value="'+esc(d.date)+'"></td>'+
       '<td><select class="s" aria-label="Lähde">'+opts+'</select></td>'+
       '<td><input class="i" aria-label="Kuvatunniste" placeholder="tunniste" value="'+esc(d.id)+'"></td>'+
@@ -103,7 +103,7 @@
     return Array.prototype.map.call(tbody.querySelectorAll('tr'),function(tr){
       return {date:tr.querySelector('.d').value,src:tr.querySelector('.s').value,id:tr.querySelector('.i').value.trim(),
         value:pf(tr.querySelector('.v')),valid:pf(tr.querySelector('.va')),changed:pf(tr.querySelector('.ch'))};
-    }).filter(function(o){return o.date&&o.value!=null&&!isNaN(o.value)});
+    }).filter(function(o){return o.date&&((o.value!=null&&!isNaN(o.value))||(o.valid!=null&&!isNaN(o.valid)))});
   }
   function readP(){
     var p={measure:measureSel.value,bufferM:parseFloat($('buffer').value)||0};
@@ -111,8 +111,8 @@
     return p;
   }
   function css(v){return getComputedStyle(root).getPropertyValue(v).trim()}
-  var COL={HLS:'--accent',S2:'--blue',PS:'--warn',S1:'--violet'};
-  var NAME={HLS:'HLS',S2:'Sentinel-2',PS:'PlanetScope',S1:'S1-koherenssi'};
+  var COL={HLS:'--accent',S2:'--blue',PS:'--warn',S1:'--violet',S1B:'--violet'};
+  var NAME={HLS:'HLS',S2:'Sentinel-2',PS:'PlanetScope',S1:'S1-koherenssi',S1B:'S1 VH-takaisinsironta'};
   var current=null, exampleOn=false;
   $('cropOk').addEventListener('change',function(){render()});
 
@@ -123,11 +123,10 @@
     var conflict=!m||(k&&expected!==m);
     return {conflict:conflict, confirmed:$('cropOk').checked, kasvi:k, expected:expected, measure:m};
   }
-  // Pääarvio: Sentinel-2 L2A ja HLS S30 ovat samoja kuvia, joten niitä ei lasketa riippumattomiksi lähteiksi.
-  function mainObs(obs){
-    var hasHls=obs.some(function(o){return C.FAMILY[o.src]==='HLS'});
-    return hasHls?obs.filter(function(o){return o.src!=='Sentinel-2'}):obs;
-  }
+  // Pääarvio: HLS ja Sentinel-2 L2A yhdistetään päivämäärittäin (core.fuse). L2A täyttää HLS:n puuttuvat
+  // granulit, ja ristiriitaiset maskit merkitään epävarmoiksi. Samoja kuvia ei lasketa riippumattomiksi lähteiksi.
+  var fuseInfo=null;
+  function mainObs(obs){ var f=C.fuse(obs,readP()); fuseInfo=f.info; return f.obs }
   function factFrom(checks,re){return checks.filter(function(c){return re.test(c.t)})[0]||null}
 
   function render(){
@@ -145,13 +144,15 @@
       $('cropOk').parentNode.hidden=!cs.measure;
     }
     var season=seasonYear(), yearNote=parcelInfo.vuosi&&season&&parcelInfo.vuosi!==season?'Lohkon rajaus ja kasvi ovat Ruokaviraston vuoden '+parcelInfo.vuosi+' aineistosta, arvioitava kausi on '+season+'. Tarkista, että ne ovat samat tänä vuonna.':null;
-    $('exBadge').hidden=!exampleOn;
+    // Merkintä vain esimerkkidatalle; teksti tyhjennetään, ettei se näy tekstinä luettaessa piilotettunakaan.
+    $('exBadge').hidden=!exampleOn; $('exBadge').textContent=exampleOn?'keksitty esimerkkidata':'';
     $('resMeta').textContent='Kasvulohko '+lohko+(p.measure?' · '+p.measure:'')+(season?' · '+season:'');
     updateCode(obs);
     renderCompare(obsAll,p);
+    renderMonitor(obsAll,p);
     var v=$('verdict'), ck=$('checks'), ev=$('events'), facts=$('facts'), bwEl=$('bigwarns'), meter=$('meter');
     var out=$('out'), svg=$('chart');
-    if(obs.length<2){
+    if(obs.filter(function(o){return o.value!=null&&!isNaN(o.value)}).length<2){
       v.className='muted';v.textContent='Lisää vähintään kaksi saman lähteen havaintoa.';
       ck.innerHTML='';ev.innerHTML='';facts.innerHTML='';bwEl.innerHTML='';out.value='';svg.innerHTML='';$('legend').innerHTML='';
       setMeter(null);current=null;$('techSum').textContent='tarkistukset, tapahtumat ja havaintotaulukko';
@@ -163,6 +164,8 @@
       pois_jatetyt_havainnot:res.excluded.map(function(x){return {havainto:x.obs,syy:x.reason}}),havainnot:res.used.map(function(o){return {paiva:o.date,lahde:o.src,tunniste:o.id,arvo:o.value,kelvolliset:o.valid,muuttunut:o.changed}}),
       lahteet:['De Vroey ym. 2022, doi:10.1016/j.rse.2022.113145','Claverie ym. 2018, doi:10.1016/j.rse.2018.09.002','Tamm ym. 2016, doi:10.3390/rs8100802','Kolecka ym. 2018, doi:10.3390/rs10081221','Ruokavirasto, peltovalvontaohje 2026']};
     if(cmpCache) current.lahdevertailu=cmpCache;
+    if(monCache) current.seuranta=monCache;
+    if(fuseInfo&&fuseInfo.mode==='HLS + L2A') current.yhdistaminen={hls_l2a:true,l2a_taydennyksia:fuseInfo.filled,maskiristiriitoja:fuseInfo.conflicts};
     var vd=res.verdict, b=res.best;
     v.className='';
     v.innerHTML='<div class="verdict v-'+vd.level+'">'+esc(vd.label)+'</div><div class="vdetail">'+
@@ -181,8 +184,9 @@
     facts.innerHTML=f;
     var bw='';
     if(cs.conflict&&!cs.confirmed) bw+='<div class="bigwarn"><strong>Tarkista toimenpide.</strong> '+(cs.kasvi?'Lohkon kasvi on „'+esc(cs.kasvi)+'”. ':'')+'Tulos ei ole näyttöä niitosta ennen kuin toimenpide on vahvistettu vaiheessa 2.</div>';
-    if(slow.length&&b) bw+='<div class="bigwarn"><strong>Hidas muutos: tarkista, että kyse on niitosta.</strong> Niittoväli '+C.fi(b.start)+'–'+C.fi(b.end)+' on pitkä, ja NDVI:n hidas lasku voi olla myös tuleentumista, kuivuutta tai sadonkorjuuta. Liitä kuva niitosta, jos sinulla on sellainen.</div>';
+    if(slow.length&&b) bw+='<div class="bigwarn"><strong>Hidas muutos: tarkista, että kyse on niitosta.</strong> '+(function(){var d=b.dets.filter(function(x){return (x.notes||[]).some(function(n){return /tuleentum/.test(n)})})[0];return d?'Pudotus näkyi vasta '+Math.round(d.gap)+' vrk havaintovälin yli ('+C.fi(d.before.date)+'–'+C.fi(d.after.date)+')':'Havaintoväli on pitkä'})()+', ja NDVI:n hidas lasku voi olla myös tuleentumista, kuivuutta tai sadonkorjuuta. Liitä kuva niitosta, jos sinulla on sellainen.</div>';
     if(yearNote) bw+='<div class="bigwarn">'+esc(yearNote)+'</div>';
+    if(res.post&&res.post.n<C.DEFAULTS.postDeadline&&rule&&rule.latest) bw+='<div class="bigwarn"><strong>Jatka hakujaksoa määräpäivän yli.</strong> Määräpäivän '+C.fi(res.post.deadline)+' jälkeen '+(res.post.n?'on vain '+res.post.n+' selkeä kuva':'ei ole yhtään selkeää kuvaa')+'. Tarvitaan vähintään '+C.DEFAULTS.postDeadline+', jotta nähdään, pysyykö NDVI matalana tai palautuuko se asteittain. Siirrä loppupäivää vaiheessa 2 (esim. '+C.fi(res.post.deadline.slice(0,4)+'-10-15')+').</div>';
     bwEl.innerHTML=bw;
     var nWarn=checks.filter(function(c){return c.s==='warn'}).length;
     ck.innerHTML=(b?'<li class="info" style="list-style:none;margin-left:-20px"><strong>Tarkistukset</strong> · '+(nWarn?nWarn+(nWarn===1?' huomautus':' huomautusta'):'ei huomautuksia')+'</li>':'')+
@@ -191,7 +195,7 @@
       ck.innerHTML+='<li class="info"><details><summary>'+res.excluded.length+(res.excluded.length===1?' havainto jätettiin':' havaintoa jätettiin')+' pois (pilvisyys tai liian vähän kelvollisia pikseleitä)</summary><ul class="small muted">'+
         res.excluded.map(function(x){return '<li>'+C.fi(x.obs.date)+' '+esc(x.obs.src)+': '+esc(x.reason)+'</li>'}).join('')+'</ul></details></li>';
     }
-    if(obs.length<obsAll.length) ck.innerHTML+='<li class="info">Sentinel-2 L2A on mukana vain lähdevertailussa, koska HLS sisältää samat Sentinel-2-kuvat.</li>';
+    if(fuseInfo&&fuseInfo.mode==='HLS + L2A') ck.innerHTML+='<li class="info">HLS ja Sentinel-2 L2A yhdistettiin päivämäärittäin: L2A täytti '+fuseInfo.filled+' päivää, joilta HLS-kuva puuttui tai oli maskin hylkäämä'+(fuseInfo.conflicts?', ja '+fuseInfo.conflicts+' päivän maskit tai arvot olivat ristiriidassa (havainto merkitty epävarmaksi)':'')+'.</li>';
     $('techSum').textContent=(nWarn?nWarn+(nWarn===1?' huomautus':' huomautusta'):'ei huomautuksia')+' · '+res.used.length+' havaintoa käytetty, '+res.excluded.length+' jätetty pois';
     var h='';
     if(res.events.length){h+='<h3>Tunnistetut tapahtumat</h3>';res.events.forEach(function(e){
@@ -210,7 +214,7 @@
     $('outEmpty').textContent=txt?'':(cs.conflict&&!cs.confirmed)?'Vahvista toimenpide vaiheessa 2, niin teksti muodostuu.':'Tekstiä ei muodosteta, koska niittoa ei tunnistettu tai tukiehto ei täyty.';
     current.lohkoaineisto={vuosi:parcelInfo.vuosi,kasvi:parcelInfo.kasvi,lahde:parcelInfo.lahde,kausi:season,toimenpide_vahvistettu:cs.conflict?cs.confirmed:null};
     setLen();
-    drawChart(svg,res,obsAll.length>obs.length?C.analyze(obsAll,p).used:null);
+    drawChart(svg,res,null);
   }
   function setMeter(level){
     var n={strong:3,moderate:2,weak:1,fail:1,none:0}[level]||0, L={strong:'Vahva',moderate:'Kohtalainen',weak:'Heikko',fail:'Ehto ei täyty',none:'Ei näyttöä'};
@@ -246,30 +250,65 @@
     cmpCache={johtopaatos:s?s.verdict:null,yhteenveto:s?s.text:[],rivit:r.rows};
   }
 
+  // ---------- Ruokaviraston kaltainen seuranta ----------
+  var monCache=null, LIGHT_CSS={green:'ok',yellow:'w',red:'f'};
+  function renderMonitor(obsAll,p){
+    var box=$('rvCard'), withVal=obsAll.filter(function(o){return o.value!=null&&!isNaN(o.value)});
+    if(withVal.length<2){box.hidden=true;monCache=null;return}
+    var q=Object.assign({},p,{start:$('dStart').value||null,end:$('dEnd').value||null});
+    var r=C.monitorCompare(obsAll,q), base=r.rows.filter(function(x){return x.key==='RV'})[0]||r.rows.filter(function(x){return x.key==='S2'})[0]||r.rows[0];
+    if(!base){box.hidden=true;monCache=null;return}
+    box.hidden=false;
+    var bs={RV:['Sentinel-2','Sentinel-1 koherenssi','Sentinel-1 VH'],S2:['Sentinel-2'],S1:['Sentinel-1 koherenssi','Sentinel-1 VH'],HLS:['HLS-S30','HLS-L30','Sentinel-1 koherenssi','Sentinel-1 VH'],PS:['PlanetScope','Sentinel-1 koherenssi','Sentinel-1 VH']}[base.key]||C.SOURCES;
+    var m=C.monitor(obsAll.filter(function(o){return bs.indexOf(o.src)>=0}),q);
+    $('rvMain').innerHTML='<div class="light lt-'+m.light+'"><span class="dot" aria-hidden="true"></span><div><strong>'+esc(m.label)+'</strong> · luotettavuus '+esc(m.reliability.toLowerCase())+
+      '<div class="small muted">'+esc(base.label)+'</div></div></div><ul class="small">'+m.why.map(function(w){return '<li>'+esc(w)+'</li>'}).join('')+'</ul>'+
+      (m.history.length>1?'<p class="small muted" style="margin:4px 0 0">Tulos päivittäin: '+m.history.map(function(h){return fiShort(h.date)+' '+h.light.replace('green','vihreä').replace('yellow','keltainen').replace('red','punainen')}).join(' → ')+'</p>':'');
+    // aikajana
+    var segs=m.daily, tl='';
+    if(segs.length){
+      var t0=Date.parse(segs[0].from), t1=Date.parse(segs[segs.length-1].to)+864e5, SC={seurannassa:'var(--line)',katve:'var(--warn)',niitto:'var(--accent)',niitetty:'var(--accent-soft, #cfe8d4)'};
+      tl='<div class="tline" role="img" aria-label="Päivittäinen tila">'+segs.map(function(g){var w=(Date.parse(g.to)+864e5-Date.parse(g.from))/(t1-t0)*100;return '<i style="width:'+w.toFixed(2)+'%;background:'+SC[g.state]+'" title="'+fiShort(g.from)+'–'+fiShort(g.to)+' '+g.state+'"></i>'}).join('')+'</div>'+
+        '<div class="legend small"><span><i style="background:var(--line)"></i>seurannassa</span><span><i style="background:var(--warn)"></i>katve (yli '+C.DEFAULTS.warnGap+' vrk ilman selkeää kuvaa)</span><span><i style="background:var(--accent)"></i>niitto</span><span><i style="background:var(--accent-soft, #cfe8d4)"></i>niitetty</span></div>';
+    }
+    $('rvTimeline').innerHTML=tl;
+    var head='<thead><tr><th>Lähteet</th><th>Tulos</th><th>Luotettavuus</th><th>Niittoväli</th><th>Vihreä alkaen</th><th>Katvetta</th><th>Kuvia (opt./tutka)</th></tr></thead>';
+    $('rvTable').innerHTML=head+'<tbody>'+r.rows.map(function(x){
+      return '<tr><td>'+esc(x.label)+'</td><td class="'+LIGHT_CSS[x.light]+'"><span class="ldot lt-'+x.light+'"></span>'+esc(x.status)+'</td><td>'+esc(x.reliability)+'</td>'+
+        '<td class="num">'+(x.start?fiShort(x.start)+'–'+fiShort(x.end):'–')+'</td><td class="num">'+(x.firstGreen?fiShort(x.firstGreen):'–')+'</td>'+
+        '<td class="num">'+x.katveDays+' vrk</td><td class="num">'+x.nOptical+' / '+x.nRadar+'</td></tr>'}).join('')+'</tbody>';
+    $('rvSummary').innerHTML=r.summary?'<ul class="small">'+r.summary.text.map(function(t){return '<li>'+esc(t)+'</li>'}).join('')+'</ul>':'';
+    $('rvSignals').innerHTML=m.signals.length?'<ul class="small muted">'+m.signals.map(function(g){return '<li>'+fiShort(g.start)+'–'+fiShort(g.end)+' '+esc(NAME[g.fam]||g.fam)+': '+esc(g.text)+' · luottamus '+fx(g.conf,2)+'</li>'}).join('')+'</ul>':'<p class="small muted">Ei signaaleja.</p>';
+    monCache={perustaso:base.key,liikennevalo:m.light,tulos:m.label,luotettavuus:m.reliability,perustelut:m.why,paivittain:m.history,jaksot:m.daily,signaalit:m.signals,rivit:r.rows};
+  }
+
   function drawChart(svg,res,allUsed){
     var W=720,H=280,L=48,R=48,T=28,B=40, used=allUsed||res.used;
     if(!used.length){svg.innerHTML='';return}
     var t=function(d){return Date.parse(d)/864e5};
     var ds=used.map(function(o){return o.date}).sort(), x0=t(ds[0]),x1=t(ds[ds.length-1]); if(x1===x0)x1=x0+1;
     var X=function(d){return L+(t(d)-x0)/(x1-x0)*(W-L-R)}, Y=function(v){return T+(1-Math.max(0,Math.min(1,v)))*(H-T-B)};
+    // VH-takaisinsironta (dB) piirretään oikealle asteikolle −30…−10 dB → 0…1.
+    var yv=function(o){return o.fam==='S1B'?(o.value+30)/20:o.value};
     var mut=css('--muted'),line=css('--line'),acc=css('--accent');
     var s='';
     [0,0.25,0.5,0.75,1].forEach(function(v){s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(v)+'" y2="'+Y(v)+'" stroke="'+line+'"/><text x="'+(L-8)+'" y="'+(Y(v)+4)+'" text-anchor="end" font-size="13" fill="'+mut+'">'+v.toFixed(2)+'</text>'});
     s+='<text x="'+(L-8)+'" y="'+(T-12)+'" text-anchor="end" font-size="12" fill="'+mut+'">NDVI</text>';
     if(used.some(function(o){return o.fam==='S1'}))s+='<text x="'+(W-R+8)+'" y="'+(T-12)+'" font-size="12" fill="'+css('--violet')+'">koher.</text>';
+    if(used.some(function(o){return o.fam==='S1B'})){[-30,-20,-10].forEach(function(v){s+='<text x="'+(W-R+6)+'" y="'+(Y((v+30)/20)+4)+'" font-size="11" fill="'+css('--violet')+'">'+v+'</text>'});s+='<text x="'+(W-R+6)+'" y="'+(T-12)+'" font-size="12" fill="'+css('--violet')+'">VH dB</text>'}
     var rl=res.rule&&res.rule.latest, yr=ds[0].slice(0,4);
     if(rl){var dl=yr+'-'+rl; if(t(dl)>=x0&&t(dl)<=x1){var xd=X(dl); s+='<line x1="'+xd+'" x2="'+xd+'" y1="'+T+'" y2="'+(H-B)+'" stroke="'+css('--bad')+'" stroke-dasharray="4 3"/><text x="'+(xd-4)+'" y="'+(T+12)+'" text-anchor="end" font-size="12" fill="'+css('--bad')+'">'+C.fi(dl).slice(0,-4)+'</text>'}}
     res.events.forEach(function(e){var xa=X(e.start),xb=X(e.end);s+='<rect x="'+xa+'" y="'+T+'" width="'+Math.max(3,xb-xa)+'" height="'+(H-T-B)+'" fill="'+acc+'" fill-opacity="'+(e.accepted?0.16:0.06)+'"><title>'+C.fi(e.start)+'–'+C.fi(e.end)+' luottamus '+e.conf+'</title></rect>'});
     var fams={}; used.forEach(function(o){(fams[o.fam]=fams[o.fam]||[]).push(o)});
     Object.keys(fams).forEach(function(f){
-      var c=css(COL[f]), pts=fams[f].map(function(o){return X(o.date)+','+Y(o.value)}).join(' ');
-      s+='<polyline points="'+pts+'" fill="none" stroke="'+c+'" stroke-width="1.5"'+(f==='S1'||f==='S2'&&allUsed?' stroke-dasharray="4 3"':'')+'/>';
-      fams[f].forEach(function(o){s+='<circle cx="'+X(o.date)+'" cy="'+Y(o.value)+'" r="4.5" fill="'+c+'"><title>'+C.fi(o.date)+' '+esc(o.src)+' '+o.value+(o.id?' · '+esc(o.id):'')+'</title></circle>'});
+      var c=css(COL[f]), pts=fams[f].map(function(o){return X(o.date)+','+Y(yv(o))}).join(' ');
+      s+='<polyline points="'+pts+'" fill="none" stroke="'+c+'" stroke-width="1.5"'+(f==='S1'||f==='S1B'?' stroke-dasharray="4 3"':'')+'/>';
+      fams[f].forEach(function(o){s+='<circle cx="'+X(o.date)+'" cy="'+Y(yv(o))+'" r="'+(f==='S1B'?3:4.5)+'" fill="'+c+'"'+(o.conflict?' stroke="'+css('--bad')+'" stroke-width="2"':'')+'><title>'+C.fi(o.date)+' '+esc(o.src)+' '+o.value+(o.id?' · '+esc(o.id):'')+(o.conflict?' · '+esc(o.conflict):'')+'</title></circle>'});
     });
     s+='<text x="'+L+'" y="'+(H-14)+'" font-size="13" fill="'+mut+'">'+C.fi(ds[0])+'</text><text x="'+(W-R)+'" y="'+(H-14)+'" text-anchor="end" font-size="13" fill="'+mut+'">'+C.fi(ds[ds.length-1])+'</text>';
     svg.innerHTML=s;
     svg.setAttribute('aria-label','NDVI-aikasarja '+C.fi(ds[0])+'–'+C.fi(ds[ds.length-1])+(res.best?', tunnistettu niittoväli '+C.fi(res.best.start)+'–'+C.fi(res.best.end):''));
-    $('legend').innerHTML=Object.keys(fams).map(function(f){return '<span><i style="background:var('+COL[f]+')"></i>'+NAME[f]+(f==='S2'&&allUsed?' (vain vertailu)':'')+'</span>'}).join('')+'<span><i style="background:var(--accent);opacity:.35;border-radius:2px"></i>tunnistettu niittoväli</span>'+(rl?'<span><i style="background:var(--bad);border-radius:1px;width:3px"></i>määräpäivä</span>':'');
+    $('legend').innerHTML=Object.keys(fams).map(function(f){return '<span><i style="background:var('+COL[f]+')"></i>'+NAME[f]+'</span>'}).join('')+'<span><i style="background:var(--accent);opacity:.35;border-radius:2px"></i>tunnistettu niittoväli</span>'+(rl?'<span><i style="background:var(--bad);border-radius:1px;width:3px"></i>määräpäivä</span>':'');
   }
 
   function updateCode(obs){
@@ -309,7 +348,7 @@
       var sep=l.indexOf(';')>=0?';':(l.indexOf('\t')>=0?'\t':',');
       var p=l.split(sep).map(function(s){return s.trim()});
       var f=function(x){if(x==null||x==='')return null;var n=parseFloat(sep===','?x:x.replace(',','.'));return isNaN(n)?null:n};
-      if(p.length>=4&&/^\d{4}-\d{2}-\d{2}$/.test(p[0])&&C.SOURCES.indexOf(p[1])>=0&&f(p[3])!=null){addRow({date:p[0],src:p[1],id:p[2],value:f(p[3]),valid:f(p[4]),changed:f(p[5])});ok++}
+      if(p.length>=4&&/^\d{4}-\d{2}-\d{2}$/.test(p[0])&&C.SOURCES.indexOf(p[1])>=0&&(f(p[3])!=null||f(p[4])!=null)){addRow({date:p[0],src:p[1],id:p[2],value:f(p[3]),valid:f(p[4]),changed:f(p[5])});ok++}
       else bad++;
     });
     $('csvMsg').textContent=ok+' riviä tuotu'+(bad?', '+bad+' ohitettu (tarkista päivä, lähde ja arvo)':'');
@@ -340,7 +379,8 @@
 
   (function initDates(){
     var d=new Date(), y=d.getMonth()<5?d.getFullYear()-1:d.getFullYear();
-    var end=y+'-09-30', today=d.toISOString().slice(0,10);
+    // Jakso jatkuu kuukauden määräpäivän (15.9.) yli, jotta niiton jälkeen saadaan 1–2 selkeää kuvaa.
+    var end=y+'-10-15', today=d.toISOString().slice(0,10);
     $('dStart').value=y+'-05-01';
     $('dEnd').value=today<end?today:end;
   })();
@@ -543,8 +583,24 @@
     var li=say('Haetaan '+label+'-kuvat '+C.fi(r[0])+'–'+C.fi(r[1])+'…');
     var o=fetchOpts(); var prog=o.onProgress; o.onProgress=function(m,a,b){li.textContent=m;prog(m,a,b)};
     var res=await fn(f,r[0],r[1],o);
-    li.textContent=label+': '+res.searched+' kuvaa löytyi, '+res.obs.length+' päivältä saatiin lohkolta kelvollinen arvo.';
+    var nv=res.obs.filter(function(o){return o.value!=null}).length, n0=res.obs.length-nv;
+    li.textContent=label+': '+res.searched+' kuvaa löytyi, '+nv+' päivältä saatiin lohkolta kelvollinen arvo'+(n0?', '+n0+' päivän kuvissa ei yhtään kelvollista pikseliä (näkyvät pois jätettyinä)':'')+'.';
     sayHidden(res.skipped,label);
+    return res.obs;
+  }
+  // ---------- Sentinel-1 (Copernicus Data Space) ----------
+  var cdseId=$('cdseId'), cdseSecret=$('cdseSecret'), cdseRem=$('cdseRemember');
+  var sv=getSess('niitto_cdse'); if(sv){try{var o=JSON.parse(sv);cdseId.value=o.id||'';cdseSecret.value=o.secret||'';cdseRem.checked=true;$('s1On').checked=true}catch(e){}}
+  function storeCdse(){setSess('niitto_cdse',cdseRem.checked&&cdseId.value&&cdseSecret.value?JSON.stringify({id:cdseId.value,secret:cdseSecret.value}):null)}
+  [cdseId,cdseSecret,cdseRem].forEach(function(el){el.addEventListener('change',storeCdse)});
+  $('s1On').addEventListener('change',function(){if(this.checked&&(!cdseId.value||!cdseSecret.value)) $('s1Box').open=true});
+  async function fetchS1(f,r){
+    var li=say('Haetaan Sentinel-1-tutkahavainnot '+C.fi(r[0])+'–'+C.fi(r[1])+'…');
+    var o=fetchOpts(); o.onProgress=function(m){li.textContent=m};
+    o.proxy=KT.proxyBase&&KT.proxyBase()||null;
+    var res=await HK.fetchS1(f,r[0],r[1],{id:cdseId.value.trim(),secret:cdseSecret.value.trim()},o);
+    li.textContent='Sentinel-1: '+res.obs.length+' tutkakuvausta (VH-takaisinsironta, nousevat ja laskevat radat).';
+    sayHidden(res.skipped,'Sentinel-1');
     return res.obs;
   }
   $('runGo').addEventListener('click',function(){
@@ -560,6 +616,10 @@
           var mine=k==='hls'?HLS_SRC:S2_SRC, other=mode==='both'?[]:(k==='hls'?S2_SRC:HLS_SRC);
           mergeObs(obs,mine,k==='hls'?'HLS':'Sentinel-2',other); ok++;
         }catch(e){ if(ctrl&&ctrl.signal&&ctrl.signal.aborted) throw e; say(e.message,'fail') }
+      }
+      if($('s1On').checked){
+        try{ var s1=await fetchS1(f,r); mergeObs(s1,['Sentinel-1 VH'],'Sentinel-1'); ok++ }
+        catch(e){ if(ctrl&&ctrl.signal&&ctrl.signal.aborted) throw e; say(e.message,'fail') }
       }
       if(ok&&!fetchBox.querySelector('li.fail,li.warn')) setTimeout(function(){if(!busy) fetchBox.hidden=true},4000);
     });

@@ -9,6 +9,10 @@
  *   - WFS GetFeature vaatii suodattimen (CQL_FILTER tai BBOX) ja rajoittaa osumat (count ≤ 100)
  *   - kutsun Origin-otsakkeen on oltava sallittujen listalla (ALLOWED_ORIGINS)
  * Vastaukset välimuistitetaan (kasvulohkoaineisto päivittyy harvoin).
+ *
+ * Lisäksi Copernicus Data Space Ecosystemin (CDSE) tunnus- ja Statistical API -kutsut voi välittää
+ * poluilla POST /cdse/token ja POST /cdse/statistics, jos CDSE ei salli kutsua selaimesta.
+ * Näitä ei välimuistiteta eikä kirjata; tunnukset kulkevat läpi muuttamattomina.
  */
 
 const UPSTREAM = 'https://inspire.ruokavirasto-awsa.com/geoserver/';
@@ -18,6 +22,11 @@ const ALLOWED = {
   wms: ['GetFeatureInfo', 'GetMap']
 };
 const MAX_COUNT = 100;
+const CDSE = {
+  token: 'https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token',
+  statistics: 'https://sh.dataspace.copernicus.eu/statistics/v1'
+};
+const CDSE_MAX_BODY = 200000;
 const CACHE_SECONDS = 86400;
 
 function origins(env) {
@@ -27,8 +36,8 @@ function origins(env) {
 function corsHeaders(origin) {
   return {
     'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin'
   };
@@ -47,6 +56,35 @@ function param(sp, name) {
 function setParam(sp, name, value) {
   for (const k of [...sp.keys()]) if (k.toLowerCase() === name.toLowerCase()) sp.delete(k);
   sp.set(name, value);
+}
+
+/** Tarkistaa CDSE-välityksen. Palauttaa { url } tai { status, message }. */
+export function checkCdse(url, request) {
+  const m = /^\/cdse\/(token|statistics)\/?$/.exec(url.pathname);
+  if (!m) return { status: 404, message: 'Sallitut CDSE-polut: /cdse/token ja /cdse/statistics.' };
+  if (request.method !== 'POST') return { status: 405, message: 'CDSE-välitys: vain POST.' };
+  const ct = (request.headers.get('Content-Type') || '').toLowerCase();
+  if (m[1] === 'token' && !ct.startsWith('application/x-www-form-urlencoded')) return { status: 400, message: 'Tunnuskutsun sisältötyyppi on application/x-www-form-urlencoded.' };
+  if (m[1] === 'statistics' && !ct.startsWith('application/json')) return { status: 400, message: 'Statistical API -kutsun sisältötyyppi on application/json.' };
+  if (m[1] === 'statistics' && !/^Bearer\s+\S+$/.test(request.headers.get('Authorization') || '')) return { status: 401, message: 'Statistical API vaatii Bearer-tokenin.' };
+  const len = parseInt(request.headers.get('Content-Length') || '0', 10);
+  if (len > CDSE_MAX_BODY) return { status: 413, message: 'Kutsu on liian suuri.' };
+  return { url: CDSE[m[1]], kind: m[1] };
+}
+
+async function proxyCdse(request, url, okOrigin) {
+  const chk = checkCdse(url, request);
+  if (!chk.url) return error(chk.status, chk.message, okOrigin);
+  const body = await request.text();
+  if (body.length > CDSE_MAX_BODY) return error(413, 'Kutsu on liian suuri.', okOrigin);
+  if (chk.kind === 'token' && !/(^|&)grant_type=client_credentials(&|$)/.test(body)) return error(400, 'Vain client_credentials-tunnus.', okOrigin);
+  const headers = { 'Content-Type': request.headers.get('Content-Type'), 'User-Agent': 'Niittoraportti-proxy' };
+  if (chk.kind === 'statistics') headers.Authorization = request.headers.get('Authorization');
+  let up;
+  try { up = await fetch(chk.url, { method: 'POST', headers, body }); } catch (e) { return error(502, 'Copernicus Data Space ei vastannut.', okOrigin); }
+  const out = new Response(up.body, { status: up.status, headers: { 'Content-Type': up.headers.get('Content-Type') || 'application/json', 'Cache-Control': 'no-store' } });
+  for (const [k, v] of Object.entries(corsHeaders(okOrigin))) out.headers.set(k, v);
+  return out;
 }
 
 /** Tarkistaa kyselyn. Palauttaa { url } tai { status, message }. */
@@ -84,8 +122,9 @@ export default {
     if (request.method === 'OPTIONS') {
       return okOrigin ? new Response(null, { status: 204, headers: corsHeaders(okOrigin) }) : error(403, 'Origin ei ole sallittu.');
     }
-    if (request.method !== 'GET') return error(405, 'Vain GET.', okOrigin);
     if (!okOrigin) return error(403, 'Origin ei ole sallittu. Lisää se ALLOWED_ORIGINS-muuttujaan.');
+    if (url.pathname.startsWith('/cdse/')) return proxyCdse(request, url, okOrigin);
+    if (request.method !== 'GET') return error(405, 'Vain GET.', okOrigin);
 
     const chk = checkRequest(url);
     if (!chk.url) return error(chk.status, chk.message, okOrigin);

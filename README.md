@@ -5,24 +5,26 @@
 - kuvauksen siitä, miten Ruokavirasto todentaa luonnonhoitonurmien niiton satelliittiseurannalla ja Vipu-mobiilin kuvalla
 - oikeusperustan, johon vaatimus vastata Vipu-mobiilin kameralla perustuu: EU-asetukset (EU) 2021/2116 ja 2022/1173 sekä laki 1334/2022, 21 §
 - ehdotuksen porrastetusta todentamisesta HLS:llä ja PlanetScopella
-- **niiton tunnistuksen**, joka seuraa Ruokaviraston satelliittiseurannan rakennetta (aikasarja → muutos → pysyvyys → todennäköisyysraja). Tunnistus toteutetaan avoimella Sen4CAP-niittoalgoritmilla (De Vroey ym. 2022), ja lähteinä ovat HLS, Sentinel-2, PlanetScope ja Sentinel-1-koherenssi. Tuloksena saadaan lisätietoteksti Vipu-mobiiliin ja toistettava JSON-raportti.
+- **niiton tunnistuksen**, joka seuraa Ruokaviraston satelliittiseurannan rakennetta (aikasarja → muutos → pysyvyys → todennäköisyysraja). Tunnistus toteutetaan avoimella Sen4CAP-niittoalgoritmilla (De Vroey ym. 2022), ja lähteinä ovat HLS, Sentinel-2, PlanetScope sekä Sentinel-1:n takaisinsironta ja koherenssi. Tuloksena saadaan lisätietoteksti Vipu-mobiiliin ja toistettava JSON-raportti.
 - **datahaun**, joka hakee lohkolle HLS- tai Sentinel-2 L2A -kuvat (ilman tunnusta) ja PlanetScope-kuvat (Planet-API-avaimella) ja laskee niistä havaintotaulukon suoraan selaimessa
+- **Ruokaviraston kaltaisen seurannan**: Sentinel-2:n NDVI-pudotus suhteessa trendiin, Sentinel-1-tutka tukena, tulos päivittäin, liikennevalo (vihreä/keltainen/punainen) ja luotettavuustaso (korkea/keskitaso/matala), katvejaksot nimettyinä. Sama seuranta ajetaan rinnakkain HLS:lle ja PlanetScopelle (menetelmä: `METHOD.md`, Ruokaviraston kaltainen seuranta)
+- **Sentinel-1-haun** Copernicus Data Space Ecosystemistä (maksuton OAuth-asiakas): VV/VH-takaisinsironta lohkon keskiarvona nousevilta ja laskevilta radoilta
 - **lähdevertailun**, joka ajaa tunnistuksen erikseen Sentinel-2:lle, HLS:lle, PlanetScopelle ja niiden yhdistelmille ja kertoo, tarkentavatko lisälähteet niittoajankohtaa (menetelmä: `METHOD.md`, Lähdevertailu)
 
-Kaikki laskenta tapahtuu selaimessa. Vain datahaussa ja lohkon valinnassa tietoa lähetetään palveluihin: lohkon rajaus hakupalveluun (Microsoft Planetary Computer tai Planet), peruslohkotunnus tai klikkauspiste Ruokaviraston rajapintaan ja karttanäkymän tiilipyynnöt MML:lle tai OpenStreetMapille. Muuta tietoa ei lähetetä minnekään.
+Kaikki laskenta tapahtuu selaimessa. Vain datahaussa ja lohkon valinnassa tietoa lähetetään palveluihin: lohkon rajaus hakupalveluun (Microsoft Planetary Computer, Copernicus Data Space tai Planet), peruslohkotunnus tai klikkauspiste Ruokaviraston rajapintaan ja karttanäkymän tiilipyynnöt MML:lle tai OpenStreetMapille. Muuta tietoa ei lähetetä minnekään.
 
 | Tiedosto | Sisältö |
 | --- | --- |
 | `index.html` | sovellus: artikkeli ja kolmivaiheinen työkalu (lohko → tiedot → tulos) |
 | `sovellus.js` | työkalun käyttöliittymä |
 | `core.js` | tunnistuslogiikka ilman DOM-riippuvuuksia |
-| `datahaku.js` | HLS- ja PlanetScope-haku sekä pikselilaskenta selaimessa |
+| `datahaku.js` | HLS-, Sentinel-2-, Sentinel-1- ja PlanetScope-haku sekä pikselilaskenta selaimessa |
 | `kartta.js` | lohkon valinta: peruslohkotunnus, kartta (MML, Ruokavirasto) ja piirto |
 | `config.js` | asetukset: Ruokaviraston rajapinnan välityspalvelimen osoite |
-| `worker/` | Cloudflare Worker, joka välittää Ruokaviraston kasvulohkokyselyt selaimelle (ohje `worker/README.md`) |
+| `worker/` | Cloudflare Worker, joka välittää Ruokaviraston kasvulohkokyselyt ja tarvittaessa Copernicus Data Space -kutsut selaimelle (ohje `worker/README.md`) |
 | `vendor/leaflet/` | [Leaflet](https://leafletjs.com/) 1.9.4 kartalle (BSD-2, `vendor/leaflet/LICENSE`) |
 | `vendor/geotiff.js` | [geotiff.js](https://github.com/geotiffjs/geotiff.js) 2.1.3 GeoTIFF-kuvien lukuun (MIT, `vendor/geotiff.LICENSE`) |
-| `scripts/hae_havainnot.py` | sama haku komentoriviltä; tukee myös NASA Earthdataa, tuottaa CSV:n |
+| `scripts/hae_havainnot.py` | sama haku komentoriviltä (HLS, PlanetScope, Sentinel-1); tukee myös NASA Earthdataa, tuottaa CSV:n |
 | `scripts/hae_kasvulohkot.py` | niittovelvoitteiset lohkot Ruokaviraston avoimesta kasvulohkoaineistosta |
 | `METHOD.md` | menetelmä, raja-arvot ja niiden lähteet, rajoitukset |
 | `test/` | testit: `npm install && npm test`, `python test/test_hae_havainnot.py`, `node test/selain.test.js` |

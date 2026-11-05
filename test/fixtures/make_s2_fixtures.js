@@ -46,4 +46,6 @@ scene('s2a', () => 0.80, () => 4);
 scene('s2b', () => 0.30, (x, y) => (y > 6965080 ? 9 : 4));
 // 3) 17.8. niitetty: NDVI 0,45, paljas maa ja kasvillisuus (SCL 5/4) kelpaavat
 scene('s2c', () => 0.45, (x) => (x < 290150 ? 5 : 4));
+// 17.8. sininen kanava (B02): pohjoisreunalla ohut usva (heijastus 0,15 > 0,10), muualla 0,04
+write('s2c.B02.tif', 60, 45, 10, (x, y) => (y > 6965150 ? 1500 : 400) + 1000);
 console.log('Sentinel-2-testikuvat kirjoitettu');

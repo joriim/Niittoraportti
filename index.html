@@ -138,6 +138,11 @@ footer{border-top:1px solid var(--line);padding:24px 0 40px;font-size:14px;color
 .src li{margin-bottom:8px}
 .toggle{position:absolute;right:16px;top:16px}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.light{display:flex;gap:12px;align-items:center;padding:10px 12px;border-radius:10px;background:var(--bg2, rgba(0,0,0,.03))}
+.light .dot,.ldot{display:inline-block;width:18px;height:18px;border-radius:50%;flex:none;background:var(--muted)}
+.ldot{width:10px;height:10px;margin-right:6px;vertical-align:middle}
+.lt-green .dot,.ldot.lt-green{background:#2e7d32}.lt-yellow .dot,.ldot.lt-yellow{background:#f9a825}.lt-red .dot,.ldot.lt-red{background:#c62828}
+.tline{display:flex;height:14px;border-radius:7px;overflow:hidden;margin:12px 0 6px}.tline i{display:block;height:100%}
 .badge-ex{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--warn-soft);color:var(--warn);margin-left:8px}
 /* ---- Työkalu: kolmivaiheinen polku ---- */
 body[data-tab="tyokalu"] .wrap{max-width:1200px}
@@ -460,7 +465,7 @@ details.adv{margin-top:16px}
             <div><label for="dStart" class="lbl">Alkaen</label><input id="dStart" type="date"></div>
             <div><label for="dEnd" class="lbl">Päättyen</label><input id="dEnd" type="date"></div>
           </div>
-          <p class="small muted" style="margin:6px 0 0">Oletus kattaa kasvukauden ja määräpäivän 15.9.</p>
+          <p class="small muted" style="margin:6px 0 0">Oletus kattaa kasvukauden ja jatkuu kuukauden määräpäivän 15.9. yli, jotta niiton jälkeen saadaan 1–2 selkeää kuvaa.</p>
         </fieldset>
 
         <fieldset class="qset">
@@ -468,8 +473,9 @@ details.adv{margin-top:16px}
           <div class="radios" id="srcModes">
             <label class="rcard"><input type="radio" name="srcMode" value="hls" id="srcHls" checked><span><b>HLS: Sentinel-2 ja Landsat</b><span class="small muted">30 m · Landsat täydentää pilvisiä jaksoja</span></span></label>
             <label class="rcard"><input type="radio" name="srcMode" value="s2" id="srcS2"><span><b>Pelkkä Sentinel-2</b><span class="small muted">10 m · sama aineisto kuin Ruokaviraston seurannassa · pienillä lohkoilla eniten kelvollisia kuvia</span></span></label>
-            <label class="rcard"><input type="radio" name="srcMode" value="both" id="srcBoth"><span><b>Molemmat ja lähdevertailu</b><span class="small muted">näyttää, tarkentavatko lisälähteet niittoajankohtaa · hitaampi</span></span></label>
+            <label class="rcard"><input type="radio" name="srcMode" value="both" id="srcBoth"><span><b>Molemmat ja lähdevertailu</b><span class="small muted">HLS ja L2A yhdistetään päivämäärittäin: L2A täyttää puuttuvat kuvat, ristiriitaiset maskit merkitään · hitaampi</span></span></label>
           </div>
+          <label class="chk" style="margin-top:10px"><input type="checkbox" id="s1On"> <span><b>Lisää Sentinel-1-tutka</b> <span class="small muted">kuten Ruokaviraston seurannassa · näkee pilvien läpi · vaatii maksuttoman Copernicus-tunnuksen</span></span></label>
           <p class="small muted" style="margin:6px 0 0">Kuvat ovat maksuttomia eivätkä vaadi tunnuksia. Lohkon pilvet suodatetaan pikseleittäin. PlanetScope-kuvat (3 m) saa lisättyä lisäasetuksista omalla Planet-avaimella.</p>
         </fieldset>
 
@@ -488,6 +494,17 @@ details.adv{margin-top:16px}
               <div><label for="p_s1k" class="lbl">S1-kynnys kσ</label><input id="p_s1k" type="number" step="0.1" min="0"></div>
               <div style="align-self:end"><button class="btn sm" id="resetP" type="button">Palauta oletukset</button></div>
             </div>
+          </div>
+        </details>
+        <details class="adv" id="s1Box">
+          <summary><span class="ttl">Sentinel-1 (Copernicus Data Space)</span><span class="muted small">maksuton OAuth-asiakas · VH/VV-takaisinsironta lohkon keskiarvona</span></summary>
+          <div class="body">
+            <div class="row r2">
+              <div><label for="cdseId" class="lbl">Client id</label><input id="cdseId" autocomplete="off" spellcheck="false" placeholder="sh-…"></div>
+              <div><label for="cdseSecret" class="lbl">Client secret</label><input id="cdseSecret" type="password" autocomplete="off" spellcheck="false"></div>
+            </div>
+            <label class="chk" style="margin-top:10px"><input type="checkbox" id="cdseRemember"> Muista tämän välilehden ajan</label>
+            <p class="small muted" style="margin:8px 0 0">Tunnus lähetetään vain Copernicus Data Spaceen (tai välityspalvelimen kautta, jos selain estää suoran kutsun) eikä tallennu raporttiin. Koherenssia palvelu ei laske; sen voi tuoda CSV:nä. <a href="#tunnukset">Tunnukset ja ohjeet</a>.</p>
           </div>
         </details>
         <details class="adv" id="psBox">
@@ -548,6 +565,15 @@ details.adv{margin-top:16px}
           <div class="legend" id="legend"></div>
         </section>
 
+        <section class="card result" id="rvCard" hidden aria-labelledby="rvHead">
+          <h3 id="rvHead" style="margin-top:0">Ruokaviraston kaltainen seuranta</h3>
+          <p class="small muted" style="margin-top:0">NDVI:n pudotus suhteessa trendiin (trendi ± 2σ), Sentinel-1-tutka tukena, tulos päivittäin, liikennevalo ja luotettavuustaso. Sama laskenta HLS:lle ja PlanetScopelle rinnalla. Ruokaviraston koneoppimismallia ei ole julkaistu, joten luokittelu tehdään avoimilla säännöillä.</p>
+          <div id="rvMain"></div>
+          <div id="rvTimeline"></div>
+          <div class="scroll"><table class="tbl" id="rvTable"></table></div>
+          <div id="rvSummary"></div>
+          <details class="adv"><summary><span class="ttl">Signaalit</span><span class="muted small">NDVI-pudotukset trendiin nähden ja tutkan muutokset</span></summary><div class="body" id="rvSignals"></div></details>
+        </section>
         <section class="card result" id="compare" hidden aria-labelledby="cmpHead">
           <h3 id="cmpHead" style="margin-top:0">Lähdevertailu: tuovatko lisälähteet paremman näkymän?</h3>
           <div id="cmpSummary"></div>
@@ -619,7 +645,7 @@ details.adv{margin-top:16px}
     </div>
   </div>
 
-  <details class="adv" id="tunnukset" style="margin-top:24px"><summary><span class="ttl">Tunnukset ja ohjeet</span><span class="muted small">HLS ja Sentinel-2 ilman tunnusta, NASA Earthdata ja Planet-API-avain</span></summary>
+  <details class="adv" id="tunnukset" style="margin-top:24px"><summary><span class="ttl">Tunnukset ja ohjeet</span><span class="muted small">HLS ja Sentinel-2 ilman tunnusta, Copernicus (Sentinel-1), NASA Earthdata ja Planet-API-avain</span></summary>
     <div class="body">
       <h3 style="margin-top:4px">Lohkon valinta</h3>
       <p class="small"><strong>Tunnuksella</strong> sovellus hakee peruslohkon kasvulohkot Ruokaviraston avoimesta INSPIRE-rajapinnasta, ja jos niitä on useita, valitset niitettävän. <strong>Paikannimellä, osoitteella tai koordinaateilla</strong> kartta siirtyy paikkaan, ja lohkon valitset klikkaamalla. <strong>Piirtämällä</strong> rajauksen voi tehdä itse klikkaamalla lohkon kulmat. Kasvulohkoaineisto on Ruokaviraston (CC BY 4.0), ja uusin julkaistu vuosi valitaan automaattisesti.</p>
@@ -634,6 +660,15 @@ details.adv{margin-top:16px}
 python scripts/hae_havainnot.py --lohko lohko.geojson --alku 2026-05-01 --loppu 2026-09-30 --hls-lahde nasa</pre></li>
         <li>Liitä tuloksena syntyvän CSV:n sisältö <em>Liitä CSV</em> -kenttään (Tekniset tiedot).</li>
       </ol>
+      <h3>Sentinel-1: Copernicus Data Space -tunnus</h3>
+      <ol class="small">
+        <li>Luo maksuton tunnus osoitteessa <a href="https://dataspace.copernicus.eu/" rel="noopener">dataspace.copernicus.eu</a>.</li>
+        <li>Avaa <a href="https://shapps.dataspace.copernicus.eu/dashboard/" rel="noopener">Sentinel Hub -hallintapaneeli</a> → <em>User settings</em> → <em>OAuth clients</em> → <em>Create</em>. Valitse selainsovellusta varten <em>Single-page application</em> ja salli sivun osoite. Kopioi client id ja client secret.</li>
+        <li>Syötä ne vaiheessa 2 kohtaan <em>Sentinel-1 (Copernicus Data Space)</em> ja valitse <em>Lisää Sentinel-1-tutka</em>. Haku käyttää Statistical API:a ja kuluttaa tilin kuukausikiintiöstä vain vähän (yksi lohko, kaksi kutsua).</li>
+        <li>Skriptillä:<pre>export CDSE_CLIENT_ID="sh-…" CDSE_CLIENT_SECRET="…"
+python scripts/hae_havainnot.py --lohko lohko.geojson --alku 2026-05-01 --loppu 2026-10-15 --sentinel1</pre></li>
+      </ol>
+      <p class="small muted">Ruokavirasto käyttää lisäksi 12 vrk koherenssia, jonka Ilmatieteen laitos laskee. Sitä ei saa valmiina avoimesta rajapinnasta; itse laskettuna (esim. ASF HyP3 INSAR_GAMMA) sen voi tuoda CSV:nä lähteellä <code>Sentinel-1 koherenssi</code>.</p>
       <h3>PlanetScope: Planet-API-avain</h3>
       <ol class="small">
         <li><strong>Käyttöoikeus.</strong> Tarvitset Planet-tilin, jolla on PlanetScope-latausoikeus: organisaation maksullisen tilauksen tai tutkijana Planetin <a href="https://www.planet.com/markets/education-and-research/" rel="noopener">Education and Research</a> -ohjelman. Kokeilutili ei riitä.</li>

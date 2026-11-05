@@ -45,14 +45,15 @@ const PAGE2 = [
   hlsItem('HLS.L30.T34VFQ.2026227T093522.v2.0', 'hls2-l30', '2026-08-15', 'hls5', 'B05', 32634),
 ];
 const s2blob = (f) => `https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/35/V/LL/2026/${f}`;
-function s2ItemFx(id, date, prefix, baseline) {
+function s2ItemFx(id, date, prefix, baseline, blue) {
   return { id, collection: 'sentinel-2-l2a', properties: { datetime: date + 'T09:50:31Z', 'proj:epsg': 32635, 's2:processing_baseline': baseline },
-    assets: { B04: { href: s2blob(prefix + '.B04.tif') }, B08: { href: s2blob(prefix + '.B08.tif') }, SCL: { href: s2blob(prefix + '.SCL.tif') } } };
+    assets: Object.assign({ B04: { href: s2blob(prefix + '.B04.tif') }, B08: { href: s2blob(prefix + '.B08.tif') }, SCL: { href: s2blob(prefix + '.SCL.tif') } },
+      blue ? { B02: { href: s2blob(prefix + '.B02.tif') } } : {}) };
 }
 const S2_ITEMS = [
   s2ItemFx('S2B_MSIL2A_20260710T095029_N0511_R079_T35VLL_20260710T120000', '2026-07-10', 's2a', '05.11'),
   s2ItemFx('S2A_MSIL2A_20260728T095031_N0511_R079_T35VLL_20260728T120000', '2026-07-28', 's2b', '05.11'),
-  s2ItemFx('S2C_MSIL2A_20260817T095029_N0511_R079_T35VLL_20260817T120000', '2026-08-17', 's2c', '05.11'),
+  s2ItemFx('S2C_MSIL2A_20260817T095029_N0511_R079_T35VLL_20260817T120000', '2026-08-17', 's2c', '05.11', true),
 ];
 const PS = ['20260801_093000_00_2475', '20260810_093100_00_2475'];
 const KEY = 'PLAK-testi';
@@ -187,6 +188,7 @@ global.fetch = async (url, req) => {
   });
 
   let s2;
+  const VALID_0817 = 78; // 14 / 18 riviä usvan alapuolella
   await t('Sentinel-2 L2A: SCL-maski, 20 m → 10 m ja +1000 siirtymä', async () => {
     s2 = await H.fetchS2(field, '2026-07-01', '2026-08-31', { bufferM: 10 });
     assert.strictEqual(s2.searched, 3);
@@ -196,13 +198,14 @@ global.fetch = async (url, req) => {
     assert.deepStrictEqual([by['2026-07-10'].src, by['2026-07-10'].value, by['2026-07-10'].valid], ['Sentinel-2', 0.8, 100]);
     assert.ok(by['2026-07-28'].valid < 50, 'pilvinen pohjoisosa hylätty: ' + by['2026-07-28'].valid);
     assert.strictEqual(by['2026-08-17'].value, 0.45, 'siirtymä vähennetty ennen NDVI:tä');
-    assert.strictEqual(by['2026-08-17'].valid, 100, 'paljas maa (SCL 5) kelpaa');
+    assert.strictEqual(by['2026-08-17'].valid, VALID_0817, 'paljas maa (SCL 5) kelpaa, sininen kanava hylkää usvaisen pohjoisreunan');
     assert.strictEqual(by['2026-08-17'].changed, 100, 'muutos verrataan 10.7. kuvaan');
+    assert.strictEqual(by['2026-07-28'].src, 'Sentinel-2');
   });
 
   await t('Sentinel-2: SCL-luokat ja prosessointiversion siirtymä', () => {
-    [4, 5, 6].forEach((v) => assert.ok(H.sclValid(v)));
-    [0, 1, 2, 3, 7, 8, 9, 10, 11].forEach((v) => assert.ok(!H.sclValid(v), 'hylätään ' + v));
+    [4, 5].forEach((v) => assert.ok(H.sclValid(v)));
+    [0, 1, 2, 3, 6, 7, 8, 9, 10, 11].forEach((v) => assert.ok(!H.sclValid(v), 'hylätään ' + v));
     assert.strictEqual(H.s2Offset({ properties: { 's2:processing_baseline': '05.11' } }), 1000);
     assert.strictEqual(H.s2Offset({ properties: { 's2:processing_baseline': '03.01' } }), 0);
     assert.strictEqual(H.s2Offset({ properties: { datetime: '2021-07-01T10:00:00Z' } }), 0);
@@ -247,6 +250,74 @@ global.fetch = async (url, req) => {
     await assert.rejects(() => H.psSearch('väärä', field, '2026-07-01', '2026-08-31'), /HTTP 401 – tarkista API-avain/);
     global.fetch = async () => { throw new TypeError('Failed to fetch'); };
     await assert.rejects(() => H.psSearch('x', field, '2026-07-01', '2026-08-31'), /CORS.*hae_havainnot\.py/);
+    global.fetch = real;
+  });
+
+  await t('0 % kelvollisia: kuva palautetaan tyhjällä arvolla eikä katoa', () => {
+    const fw = { mask: new Uint8Array([1, 1]), n: 2, w: 2, h: 1, origin: [0, 0], res: [10, -10], window: [0, 0, 2, 1], epsg: 32635 };
+    const out = H.finalize([
+      { date: '2026-07-01', src: 'HLS-S30', fam: 'HLS', id: 'pilvi', ndvi: new Float32Array([NaN, NaN]), fw, value: null, nValid: 0 },
+      { date: '2026-07-05', src: 'HLS-S30', fam: 'HLS', id: 'a', ndvi: new Float32Array([0.8, 0.8]), fw, value: 0.8, nValid: 2 },
+      { date: '2026-07-05', src: 'HLS-S30', fam: 'HLS', id: 'b', ndvi: new Float32Array([NaN, NaN]), fw, value: null, nValid: 0 }
+    ], { ndviDrop: 0.12, minValid: 50 });
+    assert.deepStrictEqual(out.map((o) => [o.date, o.id, o.value, o.valid]), [['2026-07-01', 'pilvi', null, 0], ['2026-07-05', 'a', 0.8, 100]]);
+  });
+
+  await t('Sentinel-1: CDSE-tunnus, Statistical API -pyyntö ja vastauksen muunnos dB:ksi', async () => {
+    H._clearCdse();
+    const real = global.fetch, seen = [];
+    const exp = Math.floor(Date.now() / 1000) + 600;
+    const jwt = 'x.' + Buffer.from(JSON.stringify({ exp })).toString('base64url') + '.y';
+    const stat = (mean, n, nd) => ({ stats: { min: 0, max: 1, mean, stDev: 0.01, sampleCount: n, noDataCount: nd } });
+    global.fetch = async (url, req) => {
+      seen.push({ url: String(url), req });
+      if (/openid-connect\/token$/.test(url)) return json({ access_token: jwt, expires_in: 600 });
+      const body = JSON.parse(req.body), dir = body.input.data[0].dataFilter.orbitDirection;
+      return json({ data: dir === 'ASCENDING' ? [
+        { interval: { from: '2026-07-02T00:00:00Z', to: '2026-07-03T00:00:00Z' }, outputs: { s1: { bands: { B0: stat(0.1, 100, 0), B1: stat(0.02, 100, 0) } } } },
+        { interval: { from: '2026-07-03T00:00:00Z', to: '2026-07-04T00:00:00Z' }, outputs: { s1: { bands: { B0: stat('NaN', 100, 100), B1: stat('NaN', 100, 100) } } } },
+        { interval: { from: '2026-07-08T00:00:00Z', to: '2026-07-09T00:00:00Z' }, outputs: { s1: { bands: { B0: stat(0.1, 100, 70), B1: stat(0.02, 100, 70) } } } }
+      ] : [
+        { interval: { from: '2026-07-05T00:00:00Z', to: '2026-07-06T00:00:00Z' }, outputs: { s1: { bands: { B0: stat(0.05, 100, 2), B1: stat(0.01, 100, 2) } } } },
+        { interval: { from: '2026-07-11T00:00:00Z', to: '2026-07-12T00:00:00Z' }, error: { type: 'EXECUTION_ERROR', message: 'ei dataa' } }
+      ] });
+    };
+    const res = await H.fetchS1(field, '2026-07-01', '2026-07-31', { id: 'cid', secret: 's' }, {});
+    assert.strictEqual(seen.length, 3, 'yksi token kahdelle pyynnölle');
+    assert.match(seen[0].req.body, /grant_type=client_credentials&client_id=cid&client_secret=s/);
+    const st = JSON.parse(seen[1].req.body);
+    assert.strictEqual(seen[1].url, H.ENDPOINTS.CDSE_STATS);
+    assert.strictEqual(seen[1].req.headers.Authorization, 'Bearer ' + jwt);
+    assert.strictEqual(st.input.data[0].type, 'sentinel-1-grd');
+    assert.strictEqual(st.input.data[0].processing.backCoeff, 'GAMMA0_TERRAIN');
+    assert.strictEqual(st.aggregation.aggregationInterval.of, 'P1D');
+    assert.match(st.input.bounds.properties.crs, /^http:\/\/www\.opengis\.net\/def\/crs\/EPSG\/0\/326\d\d$/);
+    assert.ok(st.input.bounds.geometry.coordinates[0][0][0] > 1e5, 'geometria metreinä UTM:ssä');
+    assert.deepStrictEqual(res.obs.map((o) => [o.date, o.src, o.value, o.valid, o.track]), [
+      ['2026-07-02', 'Sentinel-1 VH', -16.99, 100, 'ASC'],
+      ['2026-07-05', 'Sentinel-1 VH', -20, 98, 'DESC']
+    ]);
+    assert.match(res.obs[0].id, /^S1 GRD ASC 2026-07-02 VV -10\.00 dB$/);
+    assert.strictEqual(res.skipped.length, 2, 'liian vähän pikseleitä ja virhe kirjataan');
+    // toinen haku käyttää samaa tokenia
+    await H.fetchS1(field, '2026-07-01', '2026-07-31', { id: 'cid', secret: 's' }, {});
+    assert.strictEqual(seen.filter((x) => /token$/.test(x.url)).length, 1);
+    global.fetch = real;
+  });
+
+  await t('Sentinel-1: CORS-esteessä haku menee välityspalvelimen kautta; puuttuva tunnus', async () => {
+    H._clearCdse();
+    const real = global.fetch, seen = [];
+    global.fetch = async (url, req) => {
+      seen.push(String(url));
+      if (!/workers\.dev/.test(url)) throw new TypeError('Failed to fetch');
+      if (/\/cdse\/token$/.test(url)) return json({ access_token: 'a.b.c', expires_in: 600 });
+      return json({ data: [] });
+    };
+    const res = await H.fetchS1(field, '2026-07-01', '2026-07-31', { id: 'cid', secret: 's' }, { proxy: 'https://x.workers.dev/' });
+    assert.deepStrictEqual(res.obs, []);
+    assert.deepStrictEqual(seen.filter((u) => /workers/.test(u)), ['https://x.workers.dev/cdse/token', 'https://x.workers.dev/cdse/statistics', 'https://x.workers.dev/cdse/statistics']);
+    await assert.rejects(() => H.fetchS1(field, '2026-07-01', '2026-07-31', { id: '', secret: '' }, {}), /client id ja client secret/);
     global.fetch = real;
   });
 

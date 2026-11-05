@@ -10,6 +10,14 @@ Worker ei ole avoin välityspalvelin:
 - kutsu hyväksytään vain sivustoilta, jotka on lueteltu muuttujassa `ALLOWED_ORIGINS`
 - vastaukset välimuistitetaan vuorokaudeksi
 
+Lisäksi Worker välittää tarvittaessa Copernicus Data Space Ecosystemin kutsut Sentinel-1-hakua varten, jos CDSE ei salli kutsua selaimesta:
+
+- `POST /cdse/token`: vain `grant_type=client_credentials` (`application/x-www-form-urlencoded`)
+- `POST /cdse/statistics`: Statistical API, vaatii Bearer-tokenin (`application/json`, enintään 200 kt)
+- näitä ei välimuistiteta eikä kirjata, ja tunnukset kulkevat läpi muuttamattomina
+
+Sovellus yrittää ensin suoraa kutsua ja käyttää Workeria vain, jos selain estää sen. Git-integraatiolla Cloudflare ottaa uuden version käyttöön automaattisesti; käsin päivitettäessä kopioi `src/index.js` uudelleen editoriin.
+
 Cloudflaren ilmaistaso riittää: 100 000 pyyntöä vuorokaudessa.
 
 ## Käyttöönotto: selaimessa, ilman asennuksia
