@@ -50,6 +50,7 @@
     s1bK: 2.0,          // oma: ja ≥ 2σ saman kuvausgeometrian sarjan hajonnasta
     s1bSigmaFloor: 0.5, // oma: speckle ja kosteus → hajonta vähintään 0,5 dB
     s1bMinPrev: 3,      // oma: saman kuvausgeometrian sarjasta vähintään 3 aiempaa arvoa
+    s1bVvRatio: 0.7,    // oma: jos VV laskee ≥ 0,7 × VH:n lasku, muutos tulkitaan kosteudeksi
     trendWindow: 30,    // Ruokavirasto/CGI: pudotus suhteessa trendiin; trendi edellisen 30 vrk havainnoista (oma ikkuna)
     trendK: 2.0,        // oma: trendi ± 2σ -kaista
     trendSigmaFloor: 0.03, // oma: NDVI-hajonnan alaraja
@@ -189,17 +190,22 @@
   // Tutkan kuvausgeometria tunnisteesta: "ASC"/"DESC" tai "rata 22". Takaisinsirontaa verrataan vain
   // saman geometrian havaintoihin, koska tulokulma ja suunta muuttavat tasoa.
   function trackOf(o) {
-    var id = String(o.id || ''), m = /\brata\s*(\d+)/i.exec(id);
-    if (m) return 'rata ' + m[1];
-    m = /\b(ASC|DESC)\b/i.exec(id);
-    return m ? m[1].toUpperCase() : 'kaikki';
+    var id = String(o.id || ''), d = /\b(ASC|DESC)\b/i.exec(id), r = /\brata\s*(\d+)/i.exec(id), k = /\bklo\s*(\d{1,2}:\d{2})/i.exec(id);
+    var parts = [d ? d[1].toUpperCase() : null, r ? 'rata ' + r[1] : k ? 'klo ' + k[1] : null].filter(Boolean);
+    return parts.length ? parts.join(' ') : 'kaikki';
+  }
+  // VV-takaisinsironta tunnisteesta ("VV -10.00 dB") tai kentästä vv.
+  function vvOf(o) {
+    if (typeof o.vv === 'number') return o.vv;
+    var m = /\bVV\s+(-?\d+(?:[.,]\d+)?)\s*dB/i.exec(String(o.id || ''));
+    return m ? parseFloat(m[1].replace(',', '.')) : null;
   }
 
   // Tutkailmaisin 2: VH-takaisinsironnan (dB) lasku saman kuvausgeometrian trendistä.
   // Niitto poistaa kasvimassaa, jolloin tilavuussironta ja VH heikkenevät; sade ja maan
   // kosteus muuttavat tasoa myös, joten signaali on vain tukinäyttöä (luottamus 0,2–0,4).
   function s1bDetect(series, p) {
-    var groups = {}, acc = [];
+    var groups = {}, acc = [], rej = [];
     series.forEach(function (o) { var k = trackOf(o); (groups[k] = groups[k] || []).push(o); });
     Object.keys(groups).forEach(function (k) {
       var g = groups[k];
@@ -211,16 +217,26 @@
         var pred = f.icpt + f.slope * f.xs[f.xs.length - 1];
         var drop = pred - g[i].value, z = drop / f.sigma;
         if (drop >= p.s1bDrop && z >= p.s1bK) {
-          acc.push({
-            fam: 'S1B', track: k, start: g[i - 1].date, end: g[i].date, z: round(z, 2), drop: round(drop, 2), gap: gap,
-            before: g[i - 1], after: g[i], persistence: 'ei sovellu',
-            conf: 0.2 + 0.2 * clip((z - p.s1bK) / p.s1bK),
-            notes: ['sade, kaste ja maan kosteus muuttavat takaisinsirontaa, joten tutkan lasku on vain tukinäyttöä'], changed: null
-          });
+          var base = { fam: 'S1B', track: k, start: g[i - 1].date, end: g[i].date, z: round(z, 2), drop: round(drop, 2), gap: gap, before: g[i - 1], after: g[i] };
+          // Kosteus vs. niitto: maan kuivuminen tai kasvuston kuivuminen sateen jälkeen laskee VV:tä ja VH:ta
+          // yhtä paljon, niitto laskee lähinnä VH:ta (tilavuussironta). Verrataan VV:n laskua samaan trendiin.
+          var vvPrev = prev.map(function (o) { return { date: o.date, value: vvOf(o) }; }).filter(function (o) { return o.value != null; });
+          var vvNow = vvOf(g[i]), vvDrop = null, notes = ['sade, kaste ja maan kosteus muuttavat takaisinsirontaa, joten tutkan lasku on vain tukinäyttöä'];
+          if (vvNow != null && vvPrev.length >= p.s1bMinPrev) {
+            var fv = linfit(vvPrev, p.s1bSigmaFloor);
+            vvDrop = fv.icpt + fv.slope * fv.xs[fv.xs.length - 1] - vvNow;
+            if (vvDrop >= p.s1bVvRatio * drop) {
+              rej.push(Object.assign(base, { drop: round(drop, 2), reason: 'VV laski yhtä paljon (' + vvDrop.toFixed(1).replace('.', ',') + ' dB) kuin VH: todennäköisesti kosteuden muutos, ei niitto' }));
+              continue;
+            }
+          }
+          var conf = 0.2 + 0.2 * clip((z - p.s1bK) / p.s1bK);
+          if (vvDrop != null && drop - vvDrop >= p.s1bDrop) { conf = Math.min(0.45, conf + 0.05); notes.push('VH/VV-suhde laski ' + (drop - vvDrop).toFixed(1).replace('.', ',') + ' dB, mikä sopii kasvimassan poistumiseen'); }
+          acc.push(Object.assign(base, { persistence: 'ei sovellu', conf: conf, vvDrop: vvDrop == null ? null : round(vvDrop, 2), notes: notes, changed: null }));
         }
       }
     });
-    return { acc: acc, rej: [] };
+    return { acc: acc, rej: rej };
   }
 
   // Optinen ilmaisin, Ruokaviraston tapa: NDVI-pudotus suhteessa trendiin. Trendi sovitetaan edellisen

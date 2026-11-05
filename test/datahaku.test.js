@@ -263,60 +263,83 @@ global.fetch = async (url, req) => {
     assert.deepStrictEqual(out.map((o) => [o.date, o.id, o.value, o.valid]), [['2026-07-01', 'pilvi', null, 0], ['2026-07-05', 'a', 0.8, 100]]);
   });
 
-  await t('Sentinel-1: CDSE-tunnus, Statistical API -pyyntö ja vastauksen muunnos dB:ksi', async () => {
+  await t('Sentinel-1: tunnus, kuvausluettelo, radat ja Statistical API -vastauksen muunnos dB:ksi', async () => {
     H._clearCdse();
     const real = global.fetch, seen = [];
     const exp = Math.floor(Date.now() / 1000) + 600;
     const jwt = 'x.' + Buffer.from(JSON.stringify({ exp })).toString('base64url') + '.y';
     const stat = (mean, n, nd) => ({ stats: { min: 0, max: 1, mean, stDev: 0.01, sampleCount: n, noDataCount: nd } });
+    const cat = (dt, st, rel) => ({ properties: Object.assign({ datetime: dt, 'sat:orbit_state': st, 'sar:instrument_mode': 'IW', 'sar:polarizations': ['VV', 'VH'] }, rel ? { 'sat:relative_orbit': rel } : {}) });
     global.fetch = async (url, req) => {
       seen.push({ url: String(url), req });
       if (/openid-connect\/token$/.test(url)) return json({ access_token: jwt, expires_in: 600 });
+      if (/catalog/.test(url)) {
+        const body = JSON.parse(req.body);
+        if (body.next == null) return json({ features: [cat('2026-07-02T16:05:10Z', 'ascending'), cat('2026-07-05T04:40:00Z', 'descending', 160)], context: { next: 2 } });
+        return json({ features: [cat('2026-07-08T16:05:14Z', 'ascending'), cat('2026-07-08T15:47:00Z', 'ascending'), cat('2026-07-09T15:47:20Z', 'ascending'),
+          { properties: { datetime: '2026-07-09T10:00:00Z', 'sat:orbit_state': 'ascending', 'sar:instrument_mode': 'EW' } }], context: {} });
+      }
       const body = JSON.parse(req.body), dir = body.input.data[0].dataFilter.orbitDirection;
       return json({ data: dir === 'ASCENDING' ? [
         { interval: { from: '2026-07-02T00:00:00Z', to: '2026-07-03T00:00:00Z' }, outputs: { s1: { bands: { B0: stat(0.1, 100, 0), B1: stat(0.02, 100, 0) } } } },
         { interval: { from: '2026-07-03T00:00:00Z', to: '2026-07-04T00:00:00Z' }, outputs: { s1: { bands: { B0: stat('NaN', 100, 100), B1: stat('NaN', 100, 100) } } } },
-        { interval: { from: '2026-07-08T00:00:00Z', to: '2026-07-09T00:00:00Z' }, outputs: { s1: { bands: { B0: stat(0.1, 100, 70), B1: stat(0.02, 100, 70) } } } }
+        { interval: { from: '2026-07-08T00:00:00Z', to: '2026-07-09T00:00:00Z' }, outputs: { s1: { bands: { B0: stat(0.1, 100, 0), B1: stat(0.02, 100, 0) } } } },
+        { interval: { from: '2026-07-09T00:00:00Z', to: '2026-07-10T00:00:00Z' }, outputs: { s1: { bands: { B0: stat(0.1, 100, 70), B1: stat(0.02, 100, 70) } } } }
       ] : [
         { interval: { from: '2026-07-05T00:00:00Z', to: '2026-07-06T00:00:00Z' }, outputs: { s1: { bands: { B0: stat(0.05, 100, 2), B1: stat(0.01, 100, 2) } } } },
         { interval: { from: '2026-07-11T00:00:00Z', to: '2026-07-12T00:00:00Z' }, error: { type: 'EXECUTION_ERROR', message: 'ei dataa' } }
       ] });
     };
     const res = await H.fetchS1(field, '2026-07-01', '2026-07-31', { id: 'cid', secret: 's' }, {});
-    assert.strictEqual(seen.length, 3, 'yksi token kahdelle pyynnölle');
+    assert.deepStrictEqual(seen.map((x) => x.url.replace(/^.*\//, '')), ['token', 'search', 'search', 'v1', 'v1'], 'token, kaksi luettelosivua, kaksi tilastokutsua');
     assert.match(seen[0].req.body, /grant_type=client_credentials&client_id=cid&client_secret=s/);
-    const st = JSON.parse(seen[1].req.body);
-    assert.strictEqual(seen[1].url, H.ENDPOINTS.CDSE_STATS);
-    assert.strictEqual(seen[1].req.headers.Authorization, 'Bearer ' + jwt);
+    assert.strictEqual(JSON.parse(seen[2].req.body).next, 2, 'sivutus');
+    const st = JSON.parse(seen[3].req.body);
+    assert.strictEqual(seen[3].url, H.ENDPOINTS.CDSE_STATS);
+    assert.strictEqual(seen[3].req.headers.Authorization, 'Bearer ' + jwt);
     assert.strictEqual(st.input.data[0].type, 'sentinel-1-grd');
     assert.strictEqual(st.input.data[0].processing.backCoeff, 'GAMMA0_TERRAIN');
-    assert.strictEqual(st.aggregation.aggregationInterval.of, 'P1D');
+    assert.deepStrictEqual(st.aggregation.aggregationInterval, { of: 'P1D', lastIntervalBehavior: 'SHORTEN' });
+    assert.deepStrictEqual(st.aggregation.timeRange, { from: '2026-07-01T00:00:00Z', to: '2026-08-01T00:00:00Z' }, 'viimeinen päivä mukana kokonaan');
     assert.match(st.input.bounds.properties.crs, /^http:\/\/www\.opengis\.net\/def\/crs\/EPSG\/0\/326\d\d$/);
     assert.ok(st.input.bounds.geometry.coordinates[0][0][0] > 1e5, 'geometria metreinä UTM:ssä');
-    assert.deepStrictEqual(res.obs.map((o) => [o.date, o.src, o.value, o.valid, o.track]), [
-      ['2026-07-02', 'Sentinel-1 VH', -16.99, 100, 'ASC'],
-      ['2026-07-05', 'Sentinel-1 VH', -20, 98, 'DESC']
+    assert.deepStrictEqual(res.obs.map((o) => [o.date, o.value, o.valid, o.track]), [
+      ['2026-07-02', -16.99, 100, 'ASC klo 16:05'],
+      ['2026-07-05', -20, 98, 'DESC rata 160']
     ]);
-    assert.match(res.obs[0].id, /^S1 GRD ASC 2026-07-02 VV -10\.00 dB$/);
-    assert.strictEqual(res.skipped.length, 2, 'liian vähän pikseleitä ja virhe kirjataan');
+    assert.strictEqual(res.obs[0].id, 'S1 GRD ASC klo 16:05 2026-07-02 VV -10.00 dB');
+    assert.deepStrictEqual(res.skipped.map((x) => x.replace(/:.*/, '')), ['2026-07-08 ASC', '2026-07-09 ASC', '2026-07-11 DESC'], 'kaksi rataa samana päivänä, vähän pikseleitä, virhe');
+    assert.match(res.skipped[0], /kaksi rataa samana päivänä/);
+    assert.deepStrictEqual(res.tracks, [{ track: 'ASC klo 16:05', n: 1 }, { track: 'DESC rata 160', n: 1 }]);
+    assert.ok(res.notes.some((x) => /alle 4 kuvausta/.test(x)));
     // toinen haku käyttää samaa tokenia
     await H.fetchS1(field, '2026-07-01', '2026-07-31', { id: 'cid', secret: 's' }, {});
     assert.strictEqual(seen.filter((x) => /token$/.test(x.url)).length, 1);
     global.fetch = real;
   });
 
-  await t('Sentinel-1: CORS-esteessä haku menee välityspalvelimen kautta; puuttuva tunnus', async () => {
+  await t('Sentinel-1: radat kellonajasta, kun ratanumero puuttuu (± 3 min)', () => {
+    const tr = H.s1Tracks([
+      { date: '2026-07-02', min: 965.2, dir: 'ASCENDING', rel: null }, { date: '2026-07-08', min: 965.4, dir: 'ASCENDING', rel: null },
+      { date: '2026-07-14', min: 967.0, dir: 'ASCENDING', rel: null }, { date: '2026-07-03', min: 947.5, dir: 'ASCENDING', rel: null },
+      { date: '2026-07-04', min: 285, dir: 'DESCENDING', rel: 22 }]);
+    assert.deepStrictEqual(tr, { '2026-07-03|ASCENDING': 'klo 15:48', '2026-07-02|ASCENDING': 'klo 16:06', '2026-07-08|ASCENDING': 'klo 16:06', '2026-07-14|ASCENDING': 'klo 16:06', '2026-07-04|DESCENDING': 'rata 22' });
+  });
+
+  await t('Sentinel-1: CORS-esteessä haku menee välityspalvelimen kautta; luettelon virhe ei kaada hakua', async () => {
     H._clearCdse();
     const real = global.fetch, seen = [];
-    global.fetch = async (url, req) => {
+    global.fetch = async (url) => {
       seen.push(String(url));
       if (!/workers\.dev/.test(url)) throw new TypeError('Failed to fetch');
       if (/\/cdse\/token$/.test(url)) return json({ access_token: 'a.b.c', expires_in: 600 });
+      if (/\/cdse\/catalog$/.test(url)) return new Response('{"error":"x"}', { status: 500 });
       return json({ data: [] });
     };
     const res = await H.fetchS1(field, '2026-07-01', '2026-07-31', { id: 'cid', secret: 's' }, { proxy: 'https://x.workers.dev/' });
     assert.deepStrictEqual(res.obs, []);
-    assert.deepStrictEqual(seen.filter((u) => /workers/.test(u)), ['https://x.workers.dev/cdse/token', 'https://x.workers.dev/cdse/statistics', 'https://x.workers.dev/cdse/statistics']);
+    assert.deepStrictEqual(seen.filter((u) => /workers/.test(u)), ['https://x.workers.dev/cdse/token', 'https://x.workers.dev/cdse/catalog', 'https://x.workers.dev/cdse/statistics', 'https://x.workers.dev/cdse/statistics']);
+    assert.match(res.notes[0], /Ratatietoa ei saatu.*ASC\/DESC/);
     await assert.rejects(() => H.fetchS1(field, '2026-07-01', '2026-07-31', { id: '', secret: '' }, {}), /client id ja client secret/);
     global.fetch = real;
   });

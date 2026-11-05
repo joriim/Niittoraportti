@@ -333,3 +333,32 @@ t('HLS + L2A: L2A täyttää puuttuvat granulit, ristiriitaiset maskit merkitä�
   assert.strictEqual(C.fuse(obs.filter((o) => o.src === 'Sentinel-2'), {}).obs.length, 4, 'ilman HLS:ää L2A sellaisenaan');
 });
 console.log('korjaustestit läpi');
+
+// ---------- Sentinel-1: radat ja kosteuden erottaminen niitosta ----------
+const s1track = (vh, vv, track) => vh.map((v, i) => {
+  const d = day('2026-07-02', i * 12);
+  return { date: d, src: 'Sentinel-1 VH', id: 'S1 GRD ' + track + ' ' + d + ' VV ' + vv[i].toFixed(2) + ' dB', value: v, valid: 100 };
+});
+t('Sentinel-1: VH laskee, VV ei → niittoa tukeva signaali, VH/VV-suhde mainitaan', () => {
+  const r = C._s1bDetect(s1track([-17.5, -17.4, -17.6, -17.5, -20.6], [-10, -10.1, -9.9, -10, -10.2], 'ASC klo 16:05'), {});
+  assert.strictEqual(r.acc.length, 1);
+  assert.strictEqual(r.acc[0].track, 'ASC klo 16:05');
+  assert.ok(r.acc[0].notes.some((n) => /VH\/VV-suhde laski 2,8 dB/.test(n)));
+  assert.strictEqual(r.acc[0].conf, 0.45);
+});
+t('Sentinel-1: VV ja VH laskevat yhtä paljon → kosteus, ei niitto', () => {
+  const r = C._s1bDetect(s1track([-17.5, -17.4, -17.6, -17.5, -20.6], [-10, -10.1, -9.9, -10, -12.9], 'DESC rata 22'), {});
+  assert.strictEqual(r.acc.length, 0);
+  assert.match(r.rej[0].reason, /VV laski yhtä paljon \(2,9 dB\).*kosteuden muutos/);
+});
+t('Sentinel-1: eri radat verrataan erikseen', () => {
+  // kaksi rataa, joiden taso eroaa 3 dB; radalla A niitto viimeisessä kuvauksessa
+  const a = s1track([-17.5, -17.4, -17.6, -17.5, -20.6], [-10, -10, -10, -10, -10], 'ASC klo 16:05');
+  const b = s1track([-20.5, -20.4, -20.6, -20.5], [-13, -13, -13, -13], 'ASC klo 15:48').map((o) => Object.assign({}, o, { date: day(o.date, 6) }));
+  const all = a.concat(b).sort((x, y) => (x.date < y.date ? -1 : 1));
+  const sep = C._s1bDetect(all, {});
+  assert.deepStrictEqual(sep.acc.map((d) => [d.track, d.end]), [['ASC klo 16:05', '2026-08-19']]);
+  const mixed = C._s1bDetect(all.map((o) => Object.assign({}, o, { id: 'ASC' })), {});
+  assert.strictEqual(mixed.acc.length, 0, 'ilman rataerottelua ratojen tasoero peittää niiton');
+});
+console.log('tutkatestit läpi');

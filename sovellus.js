@@ -201,7 +201,7 @@
     if(res.events.length){h+='<h3>Tunnistetut tapahtumat</h3>';res.events.forEach(function(e){
       h+='<div class="ev'+(e.accepted?' acc':'')+'"><strong>'+C.fi(e.start)+'–'+C.fi(e.end)+'</strong> · luottamus '+e.conf+' · '+e.fams.map(function(f){return NAME[f]}).join(' + ')+' · '+(e.accepted?'<span style="color:var(--accent)">ylittää rajan</span>':'<span class="muted">alle rajan</span>')+
       '<div class="muted small">'+e.dets.map(function(d){return NAME[d.fam]+': '+(d.fam==='S1'?'z = '+d.z:'NDVI '+d.before.value.toFixed(2)+' → '+d.after.value.toFixed(2)+', pysyvyys: '+d.persistence)}).join(' · ')+'</div></div>'})}
-    if(res.rejected.length){h+='<h3>Hylätyt pudotukset</h3>';res.rejected.forEach(function(r){h+='<div class="ev"><strong>'+C.fi(r.start)+'–'+C.fi(r.end)+'</strong> · '+NAME[r.fam]+' · pudotus '+r.drop+'<div class="muted small">'+esc(r.reason)+'</div></div>'})}
+    if(res.rejected.length){h+='<h3>Hylätyt pudotukset</h3>';res.rejected.forEach(function(r){h+='<div class="ev"><strong>'+C.fi(r.start)+'–'+C.fi(r.end)+'</strong> · '+NAME[r.fam]+' · pudotus '+String(r.drop).replace('.',',')+(r.fam==='S1B'?' dB':'')+'<div class="muted small">'+esc(r.reason)+'</div></div>'})}
     ev.innerHTML=h;
     var txt=(cs.conflict&&!cs.confirmed)?'':C.reportText(res,lohko,p.measure);
     if(txt){
@@ -599,8 +599,9 @@
     var o=fetchOpts(); o.onProgress=function(m){li.textContent=m};
     o.proxy=KT.proxyBase&&KT.proxyBase()||null;
     var res=await HK.fetchS1(f,r[0],r[1],{id:cdseId.value.trim(),secret:cdseSecret.value.trim()},o);
-    li.textContent='Sentinel-1: '+res.obs.length+' tutkakuvausta (VH-takaisinsironta, nousevat ja laskevat radat).';
+    li.textContent='Sentinel-1: '+res.obs.length+' tutkakuvausta '+(res.tracks.length?res.tracks.length+' radalta ('+res.tracks.map(function(t){return t.track+': '+t.n}).join(', ')+')':'')+', lohkolla noin '+res.pixels+' pikseliä.';
     sayHidden(res.skipped,'Sentinel-1');
+    (res.notes||[]).forEach(function(n){say('Sentinel-1: '+n,'warn')});
     return res.obs;
   }
   $('runGo').addEventListener('click',function(){

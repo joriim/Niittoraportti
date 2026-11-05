@@ -76,4 +76,9 @@ out = D / "_s1.csv"
 H.kirjoita(s1 + [v[0]], out)
 r = out.read_text(encoding="utf-8").splitlines(); out.unlink()
 assert r[1] == "2026-07-02;Sentinel-1 VH;S1 GRD ASC 2026-07-02 VV -10.00 dB;-16.99;100;" and r[2] == "2026-07-01;HLS-S30;k0;;0;", r
+assert req["aggregation"]["timeRange"]["to"] == "2026-08-01T00:00:00Z"
+radat = H.s1_radat([{"pvm": "2026-07-02", "suunta": "ASCENDING", "rata": None, "min": 965.2}, {"pvm": "2026-07-08", "suunta": "ASCENDING", "rata": None, "min": 965.4},
+                    {"pvm": "2026-07-03", "suunta": "ASCENDING", "rata": None, "min": 947.5}, {"pvm": "2026-07-04", "suunta": "DESCENDING", "rata": 22, "min": 285}])
+assert radat == {("2026-07-03", "ASCENDING"): "klo 15:48", ("2026-07-02", "ASCENDING"): "klo 16:05", ("2026-07-08", "ASCENDING"): "klo 16:05", ("2026-07-04", "DESCENDING"): "rata 22"}, radat
+assert H.s1_jasenna(js, "ASCENDING", radat=radat)[0]["id"] == "S1 GRD ASC klo 16:05 2026-07-02 VV -10.00 dB"
 print("ok Sentinel-1")

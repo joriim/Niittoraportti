@@ -29,6 +29,8 @@
   var PL_ORDERS = 'https://api.planet.com/compute/ops/orders/v2';
   var CDSE_TOKEN = 'https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token';
   var CDSE_STATS = 'https://sh.dataspace.copernicus.eu/statistics/v1';
+  var CDSE_CATALOG = 'https://sh.dataspace.copernicus.eu/api/v1/catalog/1.0.0/search';
+  var S1_MIN_PIXELS = 30;   // oma: alle 30 tutkapikseliä (≈ 0,3 ha) → speckle hallitsee keskiarvoa
 
   // ---------- Projektio: WGS84 ↔ UTM (pohjoinen) ja ETRS-TM35FIN ----------
   // ETRS-TM35FIN (EPSG:3067) = UTM-vyöhyke 35 GRS80-ellipsoidilla; ero WGS84:ään on alle millimetrin.
@@ -518,27 +520,89 @@
     return 32600 + Math.min(60, Math.max(1, Math.floor((lon + 180) / 6) + 1));
   }
 
-  function s1Request(field, start, end, dir) {
+  function s1Geometry(field) {
     var epsg = utmEpsgFor(field);
     var polys = mapPolys(field.polys, function (lon, lat) { return toUtm(lon, lat, epsg); });
+    return { epsg: epsg, geometry: polys.length === 1 ? { type: 'Polygon', coordinates: polys[0] } : { type: 'MultiPolygon', coordinates: polys } };
+  }
+
+  // Aikaväli päättyy loppupäivää seuraavan vuorokauden alkuun, jotta viimeinen P1D-väli ei jää vajaaksi
+  // (Statistical API ohittaa vajaan viimeisen välin oletuksena).
+  function nextDay(d) { return new Date(Date.parse(d + 'T00:00:00Z') + 864e5).toISOString().slice(0, 10); }
+
+  function s1Request(field, start, end, dir) {
+    var g = s1Geometry(field);
     return {
       input: {
-        bounds: { geometry: polys.length === 1 ? { type: 'Polygon', coordinates: polys[0] } : { type: 'MultiPolygon', coordinates: polys },
-          properties: { crs: 'http://www.opengis.net/def/crs/EPSG/0/' + epsg } },
+        bounds: { geometry: g.geometry, properties: { crs: 'http://www.opengis.net/def/crs/EPSG/0/' + g.epsg } },
         data: [{ type: 'sentinel-1-grd',
           dataFilter: { acquisitionMode: 'IW', polarization: 'DV', resolution: 'HIGH', orbitDirection: dir },
           processing: { backCoeff: 'GAMMA0_TERRAIN', orthorectify: true, demInstance: 'COPERNICUS_30' } }]
       },
-      aggregation: { timeRange: { from: start + 'T00:00:00Z', to: end + 'T23:59:59Z' }, aggregationInterval: { of: 'P1D' },
+      aggregation: { timeRange: { from: start + 'T00:00:00Z', to: nextDay(end) + 'T00:00:00Z' }, aggregationInterval: { of: 'P1D', lastIntervalBehavior: 'SHORTEN' },
         evalscript: S1_EVAL, resx: 10, resy: 10 },
       calculations: { default: {} }
     };
   }
 
+  // ---------- Sentinel-1: kuvausgeometria Catalog API:sta ----------
+  // Saman suunnan (ASC/DESC) kuvauksia tulee Suomessa useilta suhteellisilta radoilta, joiden tulokulma
+  // eroaa. Takaisinsirontaa verrataan vain saman radan kuvauksiin. Rata luetaan kuvan tiedoista
+  // (sat:relative_orbit). Jos sitä ei ole, radat erotetaan kuvausajan kellonajasta: sama rata ohittaa
+  // lohkon samaan aikaan (± muutama sekunti) 6–12 vrk välein riippumatta satelliitista.
+  function catalogBody(field, start, end, next) {
+    var b = { collections: ['sentinel-1-grd'], datetime: start + 'T00:00:00Z/' + nextDay(end) + 'T00:00:00Z', intersects: field.geometry, limit: 100 };
+    if (next != null) b.next = next;
+    return b;
+  }
+
+  async function s1Catalog(field, start, end, tok, o) {
+    var feats = [], next = null;
+    for (var page = 0; page < 20; page++) {
+      var js = await cdseFetch(CDSE_CATALOG, 'catalog', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
+        body: JSON.stringify(catalogBody(field, start, end, next)) }, 'Copernicus Data Space (Sentinel-1-luettelo)', o.proxy);
+      feats = feats.concat(js.features || []);
+      next = js.context && js.context.next != null ? js.context.next : null;
+      if (next == null) break;
+    }
+    return feats.filter(function (f) {
+      var p = f.properties || {}, mode = p['sar:instrument_mode'], pol = p['sar:polarizations'] || p['s1:polarization'];
+      return (!mode || mode === 'IW') && (!pol || String(pol).indexOf('VH') >= 0);
+    }).map(function (f) {
+      var p = f.properties || {}, dt = String(p.datetime || ''), st = String(p['sat:orbit_state'] || '').toUpperCase();
+      return { date: dt.slice(0, 10), min: (+dt.slice(11, 13)) * 60 + (+dt.slice(14, 16)) + (+dt.slice(17, 19) || 0) / 60, dir: /^ASC/.test(st) ? 'ASCENDING' : /^DESC/.test(st) ? 'DESCENDING' : null,
+        rel: p['sat:relative_orbit'] != null ? +p['sat:relative_orbit'] : null, platform: p.platform || p['sat:platform'] || null };
+    }).filter(function (a) { return a.date && a.dir; });
+  }
+
+  function hhmm(m) { m = Math.round(m); return ('0' + Math.floor(m / 60) % 24).slice(-2) + ':' + ('0' + m % 60).slice(-2); }
+
+  /** Antaa kullekin (päivä, suunta) -parille rataleiman: "rata 87" tai "klo 16:05". Kellonajat ryhmitellään ± 3 min. */
+  function s1Tracks(acq) {
+    var byDir = {}, out = {};
+    acq.forEach(function (a) { (byDir[a.dir] = byDir[a.dir] || []).push(a); });
+    Object.keys(byDir).forEach(function (dir) {
+      var list = byDir[dir].slice().sort(function (a, b) { return a.min - b.min; }), clusters = [];
+      list.forEach(function (a) {
+        var c = clusters[clusters.length - 1];
+        if (c && a.min - c.last <= 3) { c.items.push(a); c.last = a.min; } else clusters.push({ first: a.min, last: a.min, items: [a] });
+      });
+      clusters.forEach(function (c) {
+        var mid = (c.first + c.last) / 2;
+        c.items.forEach(function (a) {
+          var label = a.rel != null ? 'rata ' + a.rel : 'klo ' + hhmm(mid), k = a.date + '|' + dir, cur = out[k];
+          // sama päivä ja suunta kahdelta radalta: päivän mosaiikki sekoittaa geometrioita
+          out[k] = cur && cur !== label ? 'sekoitus' : label;
+        });
+      });
+    });
+    return out;
+  }
+
   function db(x) { return 10 * Math.log10(x); }
 
-  /** Muuntaa Statistical API -vastauksen havainnoiksi (lähde "Sentinel-1 VH", arvo dB). */
-  function s1Parse(js, dir, opts) {
+  /** Muuntaa Statistical API -vastauksen havainnoiksi (lähde "Sentinel-1 VH", arvo dB). tracks: s1Tracks-tulos. */
+  function s1Parse(js, dir, opts, tracks) {
     var obs = [], skipped = [], tag = dir === 'ASCENDING' ? 'ASC' : 'DESC', minValid = opts && opts.minValid != null ? opts.minValid : 50;
     (js.data || []).forEach(function (d) {
       var date = dateOf(d.interval && d.interval.from);
@@ -550,33 +614,45 @@
       var mVh = +vh.mean, mVv = +vv.mean;
       if (!(n - nd > 0) || !isFinite(mVh) || !(mVh > 0)) return;   // ei kuvausta tänä päivänä
       if (valid < minValid) { skipped.push(date + ' ' + tag + ': kelvollisia pikseleitä ' + valid + ' %'); return; }
+      var tr = tracks && tracks[date + '|' + dir];
+      if (tr === 'sekoitus') { skipped.push(date + ' ' + tag + ': kaksi rataa samana päivänä, kuvausgeometria sekoittuu'); return; }
       var vvDb = isFinite(mVv) && mVv > 0 ? Math.round(db(mVv) * 100) / 100 : null;
-      obs.push({ date: date, src: 'Sentinel-1 VH', id: 'S1 GRD ' + tag + ' ' + date + (vvDb != null ? ' VV ' + vvDb.toFixed(2) + ' dB' : ''),
-        value: Math.round(db(mVh) * 100) / 100, valid: valid, changed: null, vv: vvDb, track: tag });
+      obs.push({ date: date, src: 'Sentinel-1 VH', id: 'S1 GRD ' + tag + (tr ? ' ' + tr : '') + ' ' + date + (vvDb != null ? ' VV ' + vvDb.toFixed(2) + ' dB' : ''),
+        value: Math.round(db(mVh) * 100) / 100, valid: valid, changed: null, vv: vvDb, track: tag + (tr ? ' ' + tr : ''), pixels: n - nd });
     });
     return { obs: obs, skipped: skipped };
   }
 
   /**
-   * Hakee Sentinel-1 VH/VV-takaisinsironnan lohkon keskiarvona kuvauspäivittäin.
+   * Hakee Sentinel-1 VH/VV-takaisinsironnan lohkon keskiarvona kuvauspäivittäin ja radoittain.
    * creds: { id, secret } (CDSE OAuth -asiakas). opts.proxy: välityspalvelimen osoite CORS-esteen varalle.
-   * Palauttaa { obs, searched, skipped }.
+   * Palauttaa { obs, searched, skipped, tracks: [{ track, n }], pixels, notes }.
    */
   async function fetchS1(field, start, end, creds, opts) {
     var o = defaults(opts); o.proxy = opts && opts.proxy;
     o.onProgress('Haetaan Sentinel-1-tunnus Copernicus Data Spacesta…');
     var tok = await cdseToken(creds && creds.id, creds && creds.secret, o);
-    var obs = [], skipped = [], done = 0;
+    var obs = [], skipped = [], notes = [], tracks = null, done = 0;
+    o.onProgress('Sentinel-1: haetaan kuvausluettelo ja radat…', 0, 3);
+    try { tracks = s1Tracks(await s1Catalog(field, start, end, tok, o)); }
+    catch (e) { notes.push('Ratatietoa ei saatu (' + e.message + '), joten kuvaukset erotellaan vain suunnan (ASC/DESC) mukaan.'); }
     for (var dir of ['ASCENDING', 'DESCENDING']) {
       if (o.signal && o.signal.aborted) throw new Error('Haku keskeytettiin.');
-      o.onProgress('Sentinel-1: lasketaan lohkon takaisinsironta (' + (dir === 'ASCENDING' ? 'nousevat' : 'laskevat') + ' radat)…', done, 2);
+      o.onProgress('Sentinel-1: lasketaan lohkon takaisinsironta (' + (dir === 'ASCENDING' ? 'nousevat' : 'laskevat') + ' radat)…', ++done, 3);
       var js = await cdseFetch(CDSE_STATS, 'statistics', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
         body: JSON.stringify(s1Request(field, start, end, dir)) }, 'Copernicus Data Space (Sentinel-1)', o.proxy);
-      var r = s1Parse(js, dir, o);
-      obs = obs.concat(r.obs); skipped = skipped.concat(r.skipped); done++;
+      var r = s1Parse(js, dir, o, tracks);
+      obs = obs.concat(r.obs); skipped = skipped.concat(r.skipped);
     }
     obs.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : 1; });
-    return { obs: obs, searched: obs.length + skipped.length, skipped: skipped };
+    var cnt = {};
+    obs.forEach(function (x) { cnt[x.track] = (cnt[x.track] || 0) + 1; });
+    var trackList = Object.keys(cnt).sort().map(function (k) { return { track: k, n: cnt[k] }; });
+    var px = obs.length ? Math.round(median(obs.map(function (x) { return x.pixels; }))) : 0;
+    if (obs.length && px < S1_MIN_PIXELS) notes.push('Lohkolla on vain noin ' + px + ' tutkapikseliä (10 m). Speckle-kohina on pienellä lohkolla suuri, joten tutkan muutokset ovat epävarmoja.');
+    var short = trackList.filter(function (t) { return t.n < 4; }).length;
+    if (short) notes.push(short + ' radalla on alle 4 kuvausta; niiden muutoksia ei voi verrata trendiin.');
+    return { obs: obs, searched: obs.length + skipped.length, skipped: skipped, tracks: trackList, pixels: px, notes: notes };
   }
 
   // ---------- PlanetScope ----------
@@ -688,10 +764,10 @@
     fmaskValid: fmaskValid, median: median, stats: stats, finalize: finalize,
     hlsSearch: hlsSearch, fetchHls: fetchHls, signHref: signHref,
     s2Search: s2Search, fetchS2: fetchS2, sclValid: sclValid, s2Offset: s2Offset,
-    fetchS1: fetchS1, s1Request: s1Request, s1Parse: s1Parse, cdseToken: cdseToken, _clearCdse: function () { cdseCache = {}; },
+    fetchS1: fetchS1, s1Request: s1Request, s1Parse: s1Parse, s1Tracks: s1Tracks, s1Catalog: s1Catalog, cdseToken: cdseToken, _clearCdse: function () { cdseCache = {}; },
     psSearch: psSearch, psOrder: psOrder, psOrderStatus: psOrderStatus, psProcess: psProcess,
     _setGeoTIFF: function (g) { GT = g; }, _clearSas: function () { sasCache = {}; },
-    ENDPOINTS: { PC_STAC: PC_STAC, PC_SAS: PC_SAS, PL_DATA: PL_DATA, PL_ORDERS: PL_ORDERS, CDSE_TOKEN: CDSE_TOKEN, CDSE_STATS: CDSE_STATS }
+    ENDPOINTS: { PC_STAC: PC_STAC, PC_SAS: PC_SAS, PL_DATA: PL_DATA, PL_ORDERS: PL_ORDERS, CDSE_TOKEN: CDSE_TOKEN, CDSE_STATS: CDSE_STATS, CDSE_CATALOG: CDSE_CATALOG }
   };
   if (typeof module === 'object' && module.exports) module.exports = api; else root.NiittoHaku = api;
 })(typeof self !== 'undefined' ? self : this);

@@ -57,6 +57,7 @@ PL_DATA = "https://api.planet.com/data/v1"
 PL_ORDERS = "https://api.planet.com/compute/ops/orders/v2"
 CDSE_TOKEN = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
 CDSE_STATS = "https://sh.dataspace.copernicus.eu/statistics/v1"
+CDSE_CATALOG = "https://sh.dataspace.copernicus.eu/api/v1/catalog/1.0.0/search"
 S1_EVAL = """//VERSION=3
 function setup(){return{input:[{bands:["VV","VH","dataMask"]}],output:[{id:"s1",bands:2,sampleType:"FLOAT32"},{id:"dataMask",bands:1}]}}
 function evaluatePixel(s){return{s1:[s.VV,s.VH],dataMask:[s.dataMask]}}"""
@@ -405,6 +406,56 @@ def cdse_token(asiakas, salaisuus):
     return r.json()["access_token"]
 
 
+def seuraava_paiva(p):
+    return (dt.date.fromisoformat(p) + dt.timedelta(days=1)).isoformat()
+
+
+def s1_radat(kuvaukset):
+    """(päivä, suunta) → "rata N" tai "klo HH:MM" (kellonajat ryhmitellään ± 3 min), kuten datahaku.js s1Tracks."""
+    ulos = {}
+    for suunta in ("ASCENDING", "DESCENDING"):
+        lista = sorted((k for k in kuvaukset if k["suunta"] == suunta), key=lambda k: k["min"])
+        ryhmat = []
+        for k in lista:
+            if ryhmat and k["min"] - ryhmat[-1]["viim"] <= 3:
+                ryhmat[-1]["k"].append(k); ryhmat[-1]["viim"] = k["min"]
+            else:
+                ryhmat.append({"eka": k["min"], "viim": k["min"], "k": [k]})
+        for r in ryhmat:
+            m = round((r["eka"] + r["viim"]) / 2)
+            for k in r["k"]:
+                leima = f"rata {k['rata']}" if k["rata"] is not None else f"klo {m // 60 % 24:02d}:{m % 60:02d}"
+                avain = (k["pvm"], suunta)
+                ulos[avain] = "sekoitus" if avain in ulos and ulos[avain] != leima else leima
+    return ulos
+
+
+def s1_luettelo(lohko, alku, loppu, tok):
+    kuvaukset, seuraava = [], None
+    for _ in range(20):
+        body = {"collections": ["sentinel-1-grd"], "datetime": f"{alku}T00:00:00Z/{seuraava_paiva(loppu)}T00:00:00Z",
+                "intersects": lohko["geojson"], "limit": 100}
+        if seuraava is not None:
+            body["next"] = seuraava
+        r = requests.post(CDSE_CATALOG, json=body, headers={"Authorization": f"Bearer {tok}"}, timeout=120)
+        r.raise_for_status()
+        js = r.json()
+        for f in js.get("features", []):
+            p = f.get("properties", {})
+            pol = p.get("sar:polarizations") or p.get("s1:polarization")
+            if p.get("sar:instrument_mode", "IW") != "IW" or (pol and "VH" not in str(pol)):
+                continue
+            t, tila = str(p.get("datetime", "")), str(p.get("sat:orbit_state", "")).upper()
+            suunta = "ASCENDING" if tila.startswith("ASC") else "DESCENDING" if tila.startswith("DESC") else None
+            if suunta and len(t) >= 19:
+                kuvaukset.append({"pvm": t[:10], "suunta": suunta, "rata": p.get("sat:relative_orbit"),
+                                  "min": int(t[11:13]) * 60 + int(t[14:16]) + int(t[17:19]) / 60})
+        seuraava = (js.get("context") or {}).get("next")
+        if seuraava is None:
+            break
+    return kuvaukset
+
+
 def s1_pyynto(lohko, alku, loppu, suunta):
     from pyproj import Transformer
     from shapely.ops import transform
@@ -417,13 +468,14 @@ def s1_pyynto(lohko, alku, loppu, suunta):
                   "data": [{"type": "sentinel-1-grd",
                             "dataFilter": {"acquisitionMode": "IW", "polarization": "DV", "resolution": "HIGH", "orbitDirection": suunta},
                             "processing": {"backCoeff": "GAMMA0_TERRAIN", "orthorectify": True, "demInstance": "COPERNICUS_30"}}]},
-        "aggregation": {"timeRange": {"from": f"{alku}T00:00:00Z", "to": f"{loppu}T23:59:59Z"}, "aggregationInterval": {"of": "P1D"},
+        "aggregation": {"timeRange": {"from": f"{alku}T00:00:00Z", "to": f"{seuraava_paiva(loppu)}T00:00:00Z"},
+                        "aggregationInterval": {"of": "P1D", "lastIntervalBehavior": "SHORTEN"},
                         "evalscript": S1_EVAL, "resx": 10, "resy": 10},
         "calculations": {"default": {}},
     }
 
 
-def s1_jasenna(js, suunta, kelv_min=50):
+def s1_jasenna(js, suunta, kelv_min=50, radat=None):
     """Statistical API -vastaus → havainnot (sama muunnos kuin datahaku.js s1Parse)."""
     import math
 
@@ -445,8 +497,12 @@ def s1_jasenna(js, suunta, kelv_min=50):
         kelv = round((n - nd) / n * 100)
         if kelv < kelv_min:
             continue
+        rata = (radat or {}).get((pvm, suunta))
+        if rata == "sekoitus":
+            continue
+        tag2 = f"{tag} {rata}" if rata else tag
         vv_db = round(10 * math.log10(m_vv), 2) if math.isfinite(m_vv) and m_vv > 0 else None
-        ulos.append({"pvm": pvm, "lahde": "Sentinel-1 VH", "id": f"S1 GRD {tag} {pvm}" + (f" VV {vv_db:.2f} dB" if vv_db is not None else ""),
+        ulos.append({"pvm": pvm, "lahde": "Sentinel-1 VH", "id": f"S1 GRD {tag2} {pvm}" + (f" VV {vv_db:.2f} dB" if vv_db is not None else ""),
                      "arvo": round(10 * math.log10(m_vh), 2), "kelvolliset": kelv, "muuttunut": None, "n": n - nd})
     return ulos
 
@@ -456,11 +512,16 @@ def hae_s1(lohko, a):
     if not (asiakas and salaisuus):
         sys.exit("Aseta Copernicus Data Space -tunnus: export CDSE_CLIENT_ID=... CDSE_CLIENT_SECRET=... (ohjeet README:ssä).")
     tok = cdse_token(asiakas, salaisuus)
+    try:
+        radat = s1_radat(s1_luettelo(lohko, a.alku, a.loppu, tok))
+    except requests.RequestException as e:
+        print(f"Sentinel-1: ratatietoa ei saatu ({e}); erotellaan vain suunnan mukaan.", file=sys.stderr)
+        radat = None
     ulos = []
     for suunta in ("ASCENDING", "DESCENDING"):
         r = requests.post(CDSE_STATS, json=s1_pyynto(lohko, a.alku, a.loppu, suunta), headers={"Authorization": f"Bearer {tok}"}, timeout=300)
         r.raise_for_status()
-        ulos += s1_jasenna(r.json(), suunta, a.kelvolliset)
+        ulos += s1_jasenna(r.json(), suunta, a.kelvolliset, radat)
     print(f"Sentinel-1: {len(ulos)} havaintoa", file=sys.stderr)
     return sorted(ulos, key=lambda o: (o["pvm"], o["id"]))
 

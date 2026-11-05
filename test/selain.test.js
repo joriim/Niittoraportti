@@ -145,6 +145,14 @@ const item = (id, c, d, p, nir, e) => ({ id, collection: c, properties: { dateti
   });
   await page.route('https://sh.dataspace.copernicus.eu/**', (route) => {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'POST' } });
+    if (/catalog/.test(route.request().url())) {
+      const f = [];
+      for (let i = 0; i < 10; i++) {
+        f.push({ properties: { datetime: new Date(Date.parse('2026-07-02T16:05:12Z') + i * 6 * 864e5).toISOString(), 'sat:orbit_state': 'ascending', 'sar:instrument_mode': 'IW' } });
+        f.push({ properties: { datetime: new Date(Date.parse('2026-07-05T04:41:00Z') + i * 6 * 864e5).toISOString(), 'sat:orbit_state': 'descending', 'sat:relative_orbit': 22 } });
+      }
+      return J(route, { features: f, context: {} });
+    }
     const b = JSON.parse(route.request().postData()), asc = b.input.data[0].dataFilter.orbitDirection === 'ASCENDING';
     const st = (m) => ({ stats: { mean: m, sampleCount: 600, noDataCount: 0 } });
     const data = [];
@@ -168,6 +176,7 @@ const item = (id, c, d, p, nir, e) => ({ id, collection: c, properties: { dateti
   assert.deepStrictEqual(rvRows, ['Sentinel-2 + Sentinel-1 (Ruokaviraston tapaan)', 'Pelkkä Sentinel-2', 'Pelkkä Sentinel-1', 'HLS (Sentinel-2 + Landsat) + Sentinel-1', 'PlanetScope + Sentinel-1', 'Kaikki lähteet']);
   assert.match(await page.textContent('#rvMain'), /luotettavuus (korkea|keskitaso|matala)/);
   assert.match(await page.textContent('#rvSignals'), /VH-takaisinsironta laski/);
+  assert.match(await page.textContent('#fetchLog'), /20 tutkakuvausta 2 radalta \(ASC klo 16:05: 10, DESC rata 22: 10\)/);
   assert.ok(await page.$('#rvTimeline .tline i'), 'aikajana');
   assert.match(await page.textContent('#chart'), /VH dB/);
   const rep2 = await page.evaluate(() => { let o = null; const real = URL.createObjectURL; URL.createObjectURL = (b) => { o = b; return real.call(URL, b); }; document.getElementById('dlJson').click(); URL.createObjectURL = real; return o && o.text(); });

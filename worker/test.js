@@ -92,6 +92,9 @@ await t('CDSE: tunnus ja Statistical API välitetään POSTina, ei välimuistia'
   assert.strictEqual(r.status, 200);
   assert.strictEqual(calls.at(-1), 'https://sh.dataspace.copernicus.eu/statistics/v1');
   assert.strictEqual(calls.init.headers.Authorization, 'Bearer abc');
+  r = await post('/cdse/catalog', '{"collections":["sentinel-1-grd"]}', { 'Content-Type': 'application/json', Authorization: 'Bearer abc' });
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(calls.at(-1), 'https://sh.dataspace.copernicus.eu/api/v1/catalog/1.0.0/search');
 });
 
 await t('CDSE: väärät kutsut hylätään', async () => {

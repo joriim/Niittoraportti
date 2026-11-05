@@ -11,7 +11,7 @@
  * Vastaukset välimuistitetaan (kasvulohkoaineisto päivittyy harvoin).
  *
  * Lisäksi Copernicus Data Space Ecosystemin (CDSE) tunnus- ja Statistical API -kutsut voi välittää
- * poluilla POST /cdse/token ja POST /cdse/statistics, jos CDSE ei salli kutsua selaimesta.
+ * poluilla POST /cdse/token, /cdse/statistics ja /cdse/catalog, jos CDSE ei salli kutsua selaimesta.
  * Näitä ei välimuistiteta eikä kirjata; tunnukset kulkevat läpi muuttamattomina.
  */
 
@@ -24,7 +24,8 @@ const ALLOWED = {
 const MAX_COUNT = 100;
 const CDSE = {
   token: 'https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token',
-  statistics: 'https://sh.dataspace.copernicus.eu/statistics/v1'
+  statistics: 'https://sh.dataspace.copernicus.eu/statistics/v1',
+  catalog: 'https://sh.dataspace.copernicus.eu/api/v1/catalog/1.0.0/search'
 };
 const CDSE_MAX_BODY = 200000;
 const CACHE_SECONDS = 86400;
@@ -60,13 +61,13 @@ function setParam(sp, name, value) {
 
 /** Tarkistaa CDSE-välityksen. Palauttaa { url } tai { status, message }. */
 export function checkCdse(url, request) {
-  const m = /^\/cdse\/(token|statistics)\/?$/.exec(url.pathname);
-  if (!m) return { status: 404, message: 'Sallitut CDSE-polut: /cdse/token ja /cdse/statistics.' };
+  const m = /^\/cdse\/(token|statistics|catalog)\/?$/.exec(url.pathname);
+  if (!m) return { status: 404, message: 'Sallitut CDSE-polut: /cdse/token, /cdse/statistics ja /cdse/catalog.' };
   if (request.method !== 'POST') return { status: 405, message: 'CDSE-välitys: vain POST.' };
   const ct = (request.headers.get('Content-Type') || '').toLowerCase();
   if (m[1] === 'token' && !ct.startsWith('application/x-www-form-urlencoded')) return { status: 400, message: 'Tunnuskutsun sisältötyyppi on application/x-www-form-urlencoded.' };
-  if (m[1] === 'statistics' && !ct.startsWith('application/json')) return { status: 400, message: 'Statistical API -kutsun sisältötyyppi on application/json.' };
-  if (m[1] === 'statistics' && !/^Bearer\s+\S+$/.test(request.headers.get('Authorization') || '')) return { status: 401, message: 'Statistical API vaatii Bearer-tokenin.' };
+  if (m[1] !== 'token' && !ct.startsWith('application/json')) return { status: 400, message: 'Statistical- ja Catalog API -kutsun sisältötyyppi on application/json.' };
+  if (m[1] !== 'token' && !/^Bearer\s+\S+$/.test(request.headers.get('Authorization') || '')) return { status: 401, message: 'Statistical API vaatii Bearer-tokenin.' };
   const len = parseInt(request.headers.get('Content-Length') || '0', 10);
   if (len > CDSE_MAX_BODY) return { status: 413, message: 'Kutsu on liian suuri.' };
   return { url: CDSE[m[1]], kind: m[1] };
@@ -79,7 +80,7 @@ async function proxyCdse(request, url, okOrigin) {
   if (body.length > CDSE_MAX_BODY) return error(413, 'Kutsu on liian suuri.', okOrigin);
   if (chk.kind === 'token' && !/(^|&)grant_type=client_credentials(&|$)/.test(body)) return error(400, 'Vain client_credentials-tunnus.', okOrigin);
   const headers = { 'Content-Type': request.headers.get('Content-Type'), 'User-Agent': 'Niittoraportti-proxy' };
-  if (chk.kind === 'statistics') headers.Authorization = request.headers.get('Authorization');
+  if (chk.kind !== 'token') headers.Authorization = request.headers.get('Authorization');
   let up;
   try { up = await fetch(chk.url, { method: 'POST', headers, body }); } catch (e) { return error(502, 'Copernicus Data Space ei vastannut.', okOrigin); }
   const out = new Response(up.body, { status: up.status, headers: { 'Content-Type': up.headers.get('Content-Type') || 'application/json', 'Cache-Control': 'no-store' } });
