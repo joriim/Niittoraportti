@@ -635,7 +635,7 @@ details.adv{margin-top:16px}
             <details class="adv" style="margin-top:12px"><summary><span class="ttl">Haku omalla koodilla</span><span class="muted small">skripti ja rajapintapohjat</span></summary>
               <div class="body">
                 <p class="muted small">Skripti <code>scripts/hae_havainnot.py</code> tuottaa CSV:n suoraan tuontimuodossa. Lisää lohkon rajaus (GeoJSON) muuttujaan <code>lohko</code> ja kutista sitä reunapuskurin verran ennen pikselien laskemista.</p>
-                <h3>HLS (NASA Earthdata, STAC)</h3>
+                <h3>HLS (Planetary Computer, STAC)</h3>
                 <pre id="hlsCode"></pre>
                 <h3>PlanetScope (Data API)</h3>
                 <pre id="planetCode"></pre>
@@ -674,21 +674,13 @@ details.adv{margin-top:16px}
 
   <div id="mobBar" class="mobbar" hidden><button type="button" class="btn primary big" id="mobGo"></button></div>
 
-  <details class="adv" id="tunnukset" style="margin-top:24px"><summary><span class="ttl">Tunnukset ja ohjeet</span><span class="muted small">HLS ja Sentinel-2 ilman tunnusta, Copernicus (Sentinel-1), NASA Earthdata ja Planet-API-avain</span></summary>
+  <details class="adv" id="tunnukset" style="margin-top:24px"><summary><span class="ttl">Tunnukset ja ohjeet</span><span class="muted small">HLS ja Sentinel-2 ilman tunnusta, Copernicus (Sentinel-1) ja Planet-API-avain</span></summary>
     <div class="body">
       <h3 style="margin-top:4px">Lohkon valinta</h3>
       <p class="small"><strong>Tunnuksella</strong> sovellus hakee peruslohkon kasvulohkot Ruokaviraston avoimesta INSPIRE-rajapinnasta, ja jos niitä on useita, valitset niitettävän. <strong>Paikannimellä, osoitteella tai koordinaateilla</strong> kartta siirtyy paikkaan, ja lohkon valitset klikkaamalla. <strong>Piirtämällä</strong> rajauksen voi tehdä itse klikkaamalla lohkon kulmat. Kasvulohkoaineisto on Ruokaviraston (CC BY 4.0), ja uusin julkaistu vuosi valitaan automaattisesti.</p>
       <p class="small muted">Ruokaviraston rajapinta ei salli hakua selaimesta. Tunnushaku ja kartan klikkaus toimivat välityspalvelimen kautta (ohje: <code>worker/README.md</code>).</p>
       <h3 style="margin-top:20px">HLS ja Sentinel-2: ei tunnusta</h3>
-      <p class="small">Sovellus hakee NASAn HLS v2.0 -aineiston ja ESA:n Sentinel-2 L2A -aineiston Microsoftin Planetary Computerista. Selain pyytää lyhytaikaisen lukuoikeuden (SAS-token) automaattisesti.</p>
-      <h3>HLS suoraan NASAlta: Earthdata-tunnus (vain skripti)</h3>
-      <ol class="small">
-        <li>Luo maksuton tunnus osoitteessa <a href="https://urs.earthdata.nasa.gov/users/new" rel="noopener">urs.earthdata.nasa.gov</a>.</li>
-        <li>Kirjaudu ja avaa <em>Generate Token</em>. Kopioi token.</li>
-        <li>Anna token skriptille:<pre>export EARTHDATA_TOKEN="token-tähän"
-python scripts/hae_havainnot.py --lohko lohko.geojson --alku 2026-05-01 --loppu 2026-09-30 --hls-lahde nasa</pre></li>
-        <li>Liitä tuloksena syntyvän CSV:n sisältö <em>Liitä CSV</em> -kenttään (Tekniset tiedot).</li>
-      </ol>
+      <p class="small">Sovellus hakee NASAn HLS v2.0 -aineiston ja ESA:n Sentinel-2 L2A -aineiston Microsoftin Planetary Computerista. Selain pyytää lyhytaikaisen lukuoikeuden (SAS-token) automaattisesti. Sama haku toimii skriptillä <code>scripts/hae_havainnot.py</code>.</p>
       <h3>Sentinel-1: Copernicus Data Space -tunnus</h3>
       <p class="small">Sentinel-1-tutkadata on maksutonta. Tarvitset Copernicus-tilin ja sille OAuth-asiakkaan (client id ja client secret).</p>
       <ol class="small">

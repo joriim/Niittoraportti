@@ -20,10 +20,6 @@ Esimerkkejä:
     # HLS Planetary Computerista (ei tunnusta)
     python hae_havainnot.py --lohko lohko.geojson --alku 2026-05-01 --loppu 2026-09-30
 
-    # HLS suoraan NASAlta (Earthdata-token, ks. README)
-    export EARTHDATA_TOKEN=...
-    python hae_havainnot.py --lohko lohko.geojson --alku 2026-05-01 --loppu 2026-09-30 --hls-lahde nasa
-
     # Lisäksi PlanetScope (Planet-API-avain); tilaus kuluttaa kiintiötä ja kysyy vahvistuksen
     export PL_API_KEY=...
     python hae_havainnot.py --lohko lohko.geojson --alku 2026-05-01 --loppu 2026-09-30 --planet
@@ -52,7 +48,6 @@ import requests
 
 PC_STAC = "https://planetarycomputer.microsoft.com/api/stac/v1"
 PC_SAS = "https://planetarycomputer.microsoft.com/api/sas/v1/token"
-NASA_STAC = "https://cmr.earthdata.nasa.gov/stac/LPCLOUD"
 PL_DATA = "https://api.planet.com/data/v1"
 PL_ORDERS = "https://api.planet.com/compute/ops/orders/v2"
 CDSE_TOKEN = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
@@ -62,10 +57,7 @@ S1_EVAL = """//VERSION=3
 function setup(){return{input:[{bands:["VV","VH","dataMask"]}],output:[{id:"s1",bands:2,sampleType:"FLOAT32"},{id:"dataMask",bands:1}]}}
 function evaluatePixel(s){return{s1:[s.VV,s.VH],dataMask:[s.dataMask]}}"""
 
-HLS = {
-    "pc": {"hls2-s30": ("B04", "B8A", "HLS-S30"), "hls2-l30": ("B04", "B05", "HLS-L30")},
-    "nasa": {"HLSS30_2.0": ("B04", "B8A", "HLS-S30"), "HLSL30_2.0": ("B04", "B05", "HLS-L30")},
-}
+HLS = {"hls2-s30": ("B04", "B8A", "HLS-S30"), "hls2-l30": ("B04", "B05", "HLS-L30")}
 
 # ---------------------------------------------------------------- lohko
 
@@ -235,57 +227,20 @@ def pc_allekirjoita(href):
     return href + ("&" if "?" in href else "?") + _sas[k][0]
 
 
-def nasa_osoite(href, token):
-    """Seuraa LP DAACin uudelleenohjauksen esiallekirjoitettuun osoitteeseen (Bearer-token)."""
-    url = href
-    for _ in range(5):
-        r = requests.get(url, headers={"Authorization": f"Bearer {token}"}, allow_redirects=False, stream=True, timeout=60)
-        r.close()
-        if r.status_code in (301, 302, 303, 307, 308):
-            loc = r.headers["Location"]
-            if "urs.earthdata.nasa.gov" in loc:
-                sys.exit("Earthdata hylkäsi tokenin. Luo uusi token osoitteessa urs.earthdata.nasa.gov (Generate Token).")
-            if "earthdatacloud.nasa.gov" not in loc:
-                return loc, None
-            url = loc
-            continue
-        if r.status_code == 200:
-            return url, {"GDAL_HTTP_HEADERS": f"Authorization: Bearer {token}"}
-        if r.status_code in (401, 403):
-            sys.exit(f"Earthdata: HTTP {r.status_code}. Tarkista EARTHDATA_TOKEN.")
-        r.raise_for_status()
-    return url, {"GDAL_HTTP_HEADERS": f"Authorization: Bearer {token}"}
-
-
 def hae_hls(lohko, a):
-    lahde = a.hls_lahde
-    kok = HLS[lahde]
-    body = {"collections": list(kok), "intersects": lohko["geojson"], "datetime": f"{a.alku}T00:00:00Z/{a.loppu}T23:59:59Z", "limit": 250}
-    if lahde == "pc":
-        body["query"] = {"eo:cloud_cover": {"lte": a.pilvisyys}}
-        kuvat = stac_haku(f"{PC_STAC}/search", body)
-    else:
-        token = os.environ.get("EARTHDATA_TOKEN")
-        if not token:
-            sys.exit("Aseta Earthdata-token: export EARTHDATA_TOKEN=... (ohjeet README:ssä).")
-        kuvat = [k for k in stac_haku(f"{NASA_STAC}/search", body)
-                 if (k.get("properties", {}).get("eo:cloud_cover") or 0) <= a.pilvisyys]
-    print(f"HLS ({lahde}): {len(kuvat)} kuvaa", file=sys.stderr)
+    kok = HLS
+    body = {"collections": list(kok), "intersects": lohko["geojson"], "datetime": f"{a.alku}T00:00:00Z/{a.loppu}T23:59:59Z", "limit": 250,
+            "query": {"eo:cloud_cover": {"lte": a.pilvisyys}}}
+    kuvat = stac_haku(f"{PC_STAC}/search", body)
+    print(f"HLS (Planetary Computer): {len(kuvat)} kuvaa", file=sys.stderr)
     env = {"GDAL_DISABLE_READDIR_ON_OPEN": "EMPTY_DIR", "GDAL_HTTP_MAX_RETRY": "3", "GDAL_HTTP_RETRY_DELAY": "2"}
 
     def yksi(k):
         try:
             red, nir, src = kok[k["collection"]]
             hrefs = [k["assets"][x]["href"] for x in (red, nir, "Fmask")]
-            e = dict(env)
-            if lahde == "pc":
-                urls = [pc_allekirjoita(h) for h in hrefs]
-            else:
-                ratk = [nasa_osoite(h, os.environ["EARTHDATA_TOKEN"]) for h in hrefs]
-                urls = [u for u, _ in ratk]
-                for _, x in ratk:
-                    e.update(x or {})
-            return hls_kuva(src, k["properties"]["datetime"][:10], k["id"], urls, lohko, a, e)
+            urls = [pc_allekirjoita(h) for h in hrefs]
+            return hls_kuva(src, k["properties"]["datetime"][:10], k["id"], urls, lohko, a, dict(env))
         except Exception as ex:  # noqa: BLE001
             print(f"  ohitettu {k.get('id')}: {ex}", file=sys.stderr)
             return None
@@ -545,7 +500,7 @@ def main(argv=None):
     ap.add_argument("--lohko", required=True, help="lohkon GeoJSON (WGS84 tai EPSG:3067)")
     ap.add_argument("--alku", help="alkupäivä VVVV-KK-PP")
     ap.add_argument("--loppu", help="loppupäivä VVVV-KK-PP")
-    ap.add_argument("--hls-lahde", choices=["pc", "nasa", "ei"], default="pc", help="pc = Planetary Computer (oletus), nasa = LP DAAC (EARTHDATA_TOKEN)")
+    ap.add_argument("--hls-lahde", choices=["pc", "ei"], default="pc", help="pc = Planetary Computer (oletus), ei = ei HLS-hakua")
     ap.add_argument("--planet", action="store_true", help="hae ja tilaa PlanetScope (PL_API_KEY)")
     ap.add_argument("--planet-tilaus", help="käsittele aiemman tilauksen tulokset")
     ap.add_argument("--sentinel1", action="store_true", help="hae Sentinel-1 VH/VV-takaisinsironta (CDSE_CLIENT_ID, CDSE_CLIENT_SECRET)")

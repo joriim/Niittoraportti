@@ -24,7 +24,7 @@ Kaikki laskenta tapahtuu selaimessa. Vain datahaussa ja lohkon valinnassa tietoa
 | `worker/` | Cloudflare Worker, joka välittää Ruokaviraston kasvulohkokyselyt ja tarvittaessa Copernicus Data Space -kutsut selaimelle (ohje `worker/README.md`) |
 | `vendor/leaflet/` | [Leaflet](https://leafletjs.com/) 1.9.4 kartalle (BSD-2, `vendor/leaflet/LICENSE`) |
 | `vendor/geotiff.js` | [geotiff.js](https://github.com/geotiffjs/geotiff.js) 2.1.3 GeoTIFF-kuvien lukuun (MIT, `vendor/geotiff.LICENSE`) |
-| `scripts/hae_havainnot.py` | sama haku komentoriviltä (HLS, PlanetScope, Sentinel-1); tukee myös NASA Earthdataa, tuottaa CSV:n |
+| `scripts/hae_havainnot.py` | sama haku komentoriviltä (HLS, PlanetScope, Sentinel-1), tuottaa CSV:n |
 | `scripts/hae_kasvulohkot.py` | niittovelvoitteiset lohkot Ruokaviraston avoimesta kasvulohkoaineistosta |
 | `METHOD.md` | menetelmä, raja-arvot ja niiden lähteet, rajoitukset |
 | `test/` | testit: `npm install && npm test`, `python test/test_hae_havainnot.py`, `node test/selain.test.js` |
@@ -69,21 +69,7 @@ Skripti kirjoittaa jokaisesta kasvulohkosta tiedoston `lohko_<tunnus>.geojson` (
 
 ### HLS ja Sentinel-2: ei tunnusta
 
-Sovellus hakee NASAn HLS v2.0 -aineiston (S30 ja L30) ja ESA:n Sentinel-2 L2A -aineiston Microsoftin Planetary Computerista. Lukuoikeus (SAS-token) haetaan automaattisesti. Sentinel-2-haku on toistaiseksi vain selaimessa; skripti `hae_havainnot.py` tukee HLS:ää ja PlanetScopea.
-
-### HLS suoraan NASAlta: Earthdata-token (vain skripti)
-
-NASAn latauspalvelu ohjaa kirjautumiseen toiseen osoitteeseen, joten sitä ei voi käyttää selaimesta.
-
-1. Luo maksuton tunnus: https://urs.earthdata.nasa.gov/users/new
-2. Kirjaudu ja valitse *Generate Token*. Kopioi token. Voimassaoloaika näkyy samalla sivulla.
-3. Aja skripti:
-   ```
-   pip install requests rasterio numpy pyproj shapely
-   export EARTHDATA_TOKEN="token-tähän"
-   python scripts/hae_havainnot.py --lohko lohko.geojson --alku 2026-05-01 --loppu 2026-09-30 --hls-lahde nasa
-   ```
-4. Liitä tuloksena syntyvän `havainnot.csv`:n sisältö sovelluksen *Liitä CSV* -kenttään.
+Sovellus hakee NASAn HLS v2.0 -aineiston (S30 ja L30) ja ESA:n Sentinel-2 L2A -aineiston Microsoftin Planetary Computerista. Lukuoikeus (SAS-token) haetaan automaattisesti. Sentinel-2-haku on toistaiseksi vain selaimessa; skripti `hae_havainnot.py` tukee HLS:ää, PlanetScopea ja Sentinel-1:tä.
 
 ### Sentinel-1: Copernicus Data Space -tunnus
 
