@@ -29,6 +29,7 @@ Kaikki laskenta tapahtuu selaimessa. Vain datahaussa ja lohkon valinnassa tietoa
 | `METHOD.md` | menetelmä, raja-arvot ja niiden lähteet, rajoitukset |
 | `test/` | testit: `npm install && npm test`, `python test/test_hae_havainnot.py`, `node test/selain.test.js` |
 
+
 ## Käyttö
 
 Avaa `index.html` selaimessa tai julkaise repo GitHub Pagesilla (Settings → Pages → Deploy from branch → `main` / root). Datahaku vaatii, että sivu avataan verkko-osoitteesta (GitHub Pages tai paikallinen palvelin, esim. `python -m http.server`). Suoraan tiedostona (`file://`) avattuna selain voi estää haut.
@@ -83,6 +84,18 @@ NASAn latauspalvelu ohjaa kirjautumiseen toiseen osoitteeseen, joten sitä ei vo
    python scripts/hae_havainnot.py --lohko lohko.geojson --alku 2026-05-01 --loppu 2026-09-30 --hls-lahde nasa
    ```
 4. Liitä tuloksena syntyvän `havainnot.csv`:n sisältö sovelluksen *Liitä CSV* -kenttään.
+
+### Sentinel-1: Copernicus Data Space -tunnus (Copernicus Data Space)
+
+1. Luo maksuton tili osoitteessa [dataspace.copernicus.eu](https://dataspace.copernicus.eu/).
+2. Avaa [Sentinel Hub -hallintapaneelista](https://shapps.dataspace.copernicus.eu/dashboard/) *User settings → OAuth clients → Create*:
+   - valitse **Single-page application**
+   - lisää sallituiksi osoitteiksi `https://joriim.github.io` ja testausta varten `http://localhost:8000`
+   - valitse tunnukselle vanhenemispäivä.
+3. Kopioi client id ja client secret (salaisuus näytetään vain kerran).
+4. Sovelluksessa: vaihe 2 → *Lisää Sentinel-1-tutka* → syötä tunnukset. Skriptissä: `CDSE_CLIENT_ID`, `CDSE_CLIENT_SECRET` ja `--sentinel1`.
+
+Jos selain estää suoran kutsun, haku kulkee välityspalvelimen (`worker/`) kautta. Tunnus ei tallennu raporttiin.
 
 ### PlanetScope: Planet-API-avain
 

@@ -690,14 +690,24 @@ python scripts/hae_havainnot.py --lohko lohko.geojson --alku 2026-05-01 --loppu 
         <li>Liitä tuloksena syntyvän CSV:n sisältö <em>Liitä CSV</em> -kenttään (Tekniset tiedot).</li>
       </ol>
       <h3>Sentinel-1: Copernicus Data Space -tunnus</h3>
+      <p class="small">Sentinel-1-tutkadata on maksutonta. Tarvitset Copernicus-tilin ja sille OAuth-asiakkaan (client id ja client secret).</p>
       <ol class="small">
-        <li>Luo maksuton tunnus osoitteessa <a href="https://dataspace.copernicus.eu/" rel="noopener">dataspace.copernicus.eu</a>.</li>
-        <li>Avaa <a href="https://shapps.dataspace.copernicus.eu/dashboard/" rel="noopener">Sentinel Hub -hallintapaneeli</a> → <em>User settings</em> → <em>OAuth clients</em> → <em>Create</em>. Valitse selainsovellusta varten <em>Single-page application</em> ja salli sivun osoite. Kopioi client id ja client secret.</li>
-        <li>Syötä ne vaiheessa 2 kohtaan <em>Sentinel-1 (Copernicus Data Space)</em> ja valitse <em>Lisää Sentinel-1-tutka</em>. Haku käyttää Statistical API:a ja kuluttaa tilin kuukausikiintiöstä vain vähän (yksi lohko, kaksi kutsua).</li>
-        <li>Skriptillä:<pre>export CDSE_CLIENT_ID="sh-…" CDSE_CLIENT_SECRET="…"
+        <li><strong>Tili.</strong> Luo maksuton tili osoitteessa <a href="https://dataspace.copernicus.eu/" rel="noopener">dataspace.copernicus.eu</a> (<em>Register</em>) ja vahvista sähköpostiosoite.</li>
+        <li><strong>OAuth-asiakas.</strong> Kirjaudu <a href="https://shapps.dataspace.copernicus.eu/dashboard/" rel="noopener">Sentinel Hub -hallintapaneeliin</a> ja avaa <em>User settings</em> → <em>OAuth clients</em> → <em>Create</em>:
+          <ul>
+            <li>Valitse <strong>Single-page application</strong>.</li>
+            <li>Lisää sallituiksi osoitteiksi <code>https://joriim.github.io</code> ja testausta varten <code>http://localhost:8000</code>. Jos käytät sovellusta muusta osoitteesta, lisää myös se.</li>
+            <li>Valitse tunnukselle vanhenemispäivä, esimerkiksi kasvukauden loppu.</li>
+          </ul>
+        </li>
+        <li><strong>Tallenna tunnus.</strong> Kopioi client id (alkaa <code>sh-</code>) ja client secret. Salaisuus näytetään vain kerran; jos se katoaa, luo uusi asiakas.</li>
+        <li><strong>Syötä sovellukseen.</strong> Vaiheessa 2 valitse <em>Lisää Sentinel-1-tutka</em> ja kirjoita tunnukset kohtaan <em>Sentinel-1 (Copernicus Data Space)</em>. <em>Muista tämän välilehden ajan</em> säilyttää ne, kunnes suljet välilehden. Tunnus ei tallennu raporttiin.</li>
+        <li><strong>Tarkista haku.</strong> Hakuloki kertoo tutkakuvausten ja ratojen määrän, esim. <em>20 tutkakuvausta 2 radalta</em>. Maininta <em>välityspalvelimen kautta</em> tarkoittaa, että selain esti suoran kutsun ja haku kulki Niittoraportin välityspalvelimen kautta; tämä on normaalia, jos sallittuja osoitteita ei ole lisätty.</li>
+        <li><strong>Skriptillä:</strong><pre>export CDSE_CLIENT_ID="sh-…" CDSE_CLIENT_SECRET="…"
 python scripts/hae_havainnot.py --lohko lohko.geojson --alku 2026-05-01 --loppu 2026-10-15 --sentinel1</pre></li>
       </ol>
-      <p class="small muted">Ruokavirasto käyttää lisäksi 12 vrk koherenssia, jonka Ilmatieteen laitos laskee. Sitä ei saa valmiina avoimesta rajapinnasta; itse laskettuna (esim. ASF HyP3 INSAR_GAMMA) sen voi tuoda CSV:nä lähteellä <code>Sentinel-1 koherenssi</code>.</p>
+      <p class="small"><strong>Jos haku ei onnistu:</strong> virhe 400 tai 401 tarkoittaa väärää tai vanhentunutta tunnusta (tarkista, ettei tunnuksen alkuun tai loppuun jäänyt välilyöntiä). Virhe 403 kertoo, että tilin kuukausikiintiö on käytetty. Yksi lohko vie siitä vain murto-osan (kaksi tilastokutsua ja kuvausluettelo).</p>
+      <p class="small muted">Asiakkaan salaisuus on selaimessa käyttäjän omassa muistissa. Copernicus pyytää hyväksymään tämän, kun asiakkaaksi valitaan Single-page application. Älä jaa tunnusta muille. Ruokavirasto käyttää lisäksi 12 vrk koherenssia, jonka Ilmatieteen laitos laskee. Sitä ei saa valmiina avoimesta rajapinnasta; itse laskettuna (esim. ASF HyP3 INSAR_GAMMA) sen voi tuoda CSV:nä lähteellä <code>Sentinel-1 koherenssi</code>.</p>
       <h3>PlanetScope: Planet-API-avain</h3>
       <ol class="small">
         <li><strong>Käyttöoikeus.</strong> Tarvitset Planet-tilin, jolla on PlanetScope-latausoikeus: organisaation maksullisen tilauksen tai tutkijana Planetin <a href="https://www.planet.com/markets/education-and-research/" rel="noopener">Education and Research</a> -ohjelman. Kokeilutili ei riitä.</li>
