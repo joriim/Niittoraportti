@@ -85,7 +85,7 @@ NASAn latauspalvelu ohjaa kirjautumiseen toiseen osoitteeseen, joten sitä ei vo
    ```
 4. Liitä tuloksena syntyvän `havainnot.csv`:n sisältö sovelluksen *Liitä CSV* -kenttään.
 
-### Sentinel-1: Copernicus Data Space -tunnus (Copernicus Data Space)
+### Sentinel-1: Copernicus Data Space -tunnus
 
 1. Luo maksuton tili osoitteessa [dataspace.copernicus.eu](https://dataspace.copernicus.eu/).
 2. Avaa [Sentinel Hub -hallintapaneelista](https://shapps.dataspace.copernicus.eu/dashboard/) *User settings → OAuth clients → Create*:
