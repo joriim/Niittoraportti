@@ -199,6 +199,11 @@ const item = (id, c, d, p, nir, e) => ({ id, collection: c, properties: { dateti
   const srcs3 = await page.$$eval('#obsTable tbody tr .s', (s) => s.map((x) => x.value));
   assert.ok(!srcs3.some((s) => /^HLS/.test(s)), 'pelkkä Sentinel-2');
   assert.match(await page.textContent('#verdict'), /Sentinel-2/);
+  // Sama haku uudelleen: tulos istunnon välimuistista, ei uusia kuvahakuja
+  await page.click('#stepNav button[data-step="2"]');
+  await page.click('#runGo');
+  await page.waitForFunction(() => /käytetään tämän istunnon aiempaa hakua/.test(document.getElementById('fetchLog').textContent), null, { timeout: 5000 });
+  assert.strictEqual((await page.$$eval('#obsTable tbody tr .s', (s) => s.map((x) => x.value))).filter((s) => s === 'Sentinel-2').length, 3);
   console.log('ok Sentinel-2-haku, pelkkä Sentinel-2 ja lähdevertailu (Sentinel-2 vs HLS vs PlanetScope)');
   await page.screenshot({ path: path.join(process.env.SHOT_DIR || require('os').tmpdir(), 'selain_vertailu.png'), fullPage: true });
   await page.click('#stepNav button[data-step="2"]');

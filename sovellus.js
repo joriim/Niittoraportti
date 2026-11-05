@@ -639,11 +639,28 @@
   }
   function srcMode(){var r=document.querySelector('input[name="srcMode"]:checked');return r?r.value:'hls'}
   var HLS_SRC=['HLS-S30','HLS-L30'], S2_SRC=['Sentinel-2'];
+  // Yhteinen edistyminen rinnakkaisille hauille ja arvio jäljellä olevasta ajasta.
+  var progParts={}, progT0=0;
+  function progReset(){progParts={};progT0=Date.now();$('fetchEta').textContent=''}
+  function progSet(kind,a,b){
+    progParts[kind]={a:a||0,b:b||0};
+    var A=0,B=0; Object.keys(progParts).forEach(function(k){A+=progParts[k].a;B+=progParts[k].b});
+    if(!B) return;
+    progEl.hidden=false; progEl.max=B; progEl.value=A;
+    var el=(Date.now()-progT0)/1000, eta=A>3&&A<B?el/A*(B-A):null;
+    $('fetchEta').textContent=Math.round(A/B*100)+' %'+(eta!=null?' · noin '+(eta<60?Math.max(5,Math.round(eta/5)*5)+' s':Math.round(eta/60)+' min')+' jäljellä':'');
+  }
+  // Saman istunnon haut muistetaan: lohkon, aikavälin ja asetusten ollessa samat tulos tulee heti.
+  var resCache={};
+  function cacheKey(kind,r,o){return [kind,fieldKey||JSON.stringify(fieldState&&fieldState.bbox),r[0],r[1],o.bufferM,o.maxCloud,o.ndviDrop,o.minValid].join('|')}
   async function fetchOne(kind,f,r){
     var label=kind==='hls'?'HLS':'Sentinel-2', fn=kind==='hls'?HK.fetchHls:HK.fetchS2;
+    var o=fetchOpts(), key=cacheKey(kind,r,o);
+    if(resCache[key]){ say(label+': käytetään tämän istunnon aiempaa hakua samalle lohkolle ja aikavälille.','ok'); return resCache[key].obs }
     var li=say('Haetaan '+label+'-kuvat '+C.fi(r[0])+'–'+C.fi(r[1])+'…');
-    var o=fetchOpts(); var prog=o.onProgress; o.onProgress=function(m,a,b){li.textContent=m;prog(m,a,b)};
+    o.onProgress=function(m,a,b){li.textContent=m; if(b) progSet(kind,a,b)};
     var res=await fn(f,r[0],r[1],o);
+    resCache[key]={obs:res.obs};
     var nv=res.obs.filter(function(o){return o.value!=null}).length, n0=res.obs.length-nv;
     li.textContent=label+': '+res.searched+' kuvaa löytyi, '+nv+' päivältä saatiin lohkolta kelvollinen arvo'+(n0?', '+n0+' päivän kuvissa ei yhtään kelvollista pikseliä (näkyvät pois jätettyinä)':'')+'.';
     sayHidden(res.skipped,label);
@@ -673,19 +690,19 @@
     goStep(3);
     run(async function(){
       var f=needField(), r=range(), mode=srcMode(); logEl.innerHTML='';
-      var kinds=mode==='both'?['hls','s2']:[mode], ok=0;
-      for(var i=0;i<kinds.length;i++){
-        var k=kinds[i];
-        try{
-          var obs=await fetchOne(k,f,r);
+      var kinds=mode==='both'?['hls','s2']:[mode], ok=0, aborted=null; progReset();
+      // Lähteet haetaan rinnakkain; kunkin tulos lisätään taulukkoon heti valmistuttuaan.
+      var jobs=kinds.map(function(k){
+        return fetchOne(k,f,r).then(function(obs){
           var mine=k==='hls'?HLS_SRC:S2_SRC, other=mode==='both'?[]:(k==='hls'?S2_SRC:HLS_SRC);
           mergeObs(obs,mine,k==='hls'?'HLS':'Sentinel-2',other); ok++;
-        }catch(e){ if(ctrl&&ctrl.signal&&ctrl.signal.aborted) throw e; say(e.message,'fail') }
-      }
-      if($('s1On').checked){
-        try{ var s1=await fetchS1(f,r); mergeObs(s1,['Sentinel-1 VH'],'Sentinel-1'); ok++ }
-        catch(e){ if(ctrl&&ctrl.signal&&ctrl.signal.aborted) throw e; say(e.message,'fail') }
-      }
+        },function(e){ if(ctrl&&ctrl.signal&&ctrl.signal.aborted) aborted=e; else say(e.message,'fail') });
+      });
+      if($('s1On').checked) jobs.push(fetchS1(f,r).then(function(s1){mergeObs(s1,['Sentinel-1 VH'],'Sentinel-1'); ok++},
+        function(e){ if(ctrl&&ctrl.signal&&ctrl.signal.aborted) aborted=e; else say(e.message,'fail') }));
+      await Promise.all(jobs);
+      $('fetchEta').textContent='';
+      if(aborted) throw aborted;
       if(ok&&!fetchBox.querySelector('li.fail,li.warn')) setTimeout(function(){if(!busy) fetchBox.hidden=true},4000);
     });
   });

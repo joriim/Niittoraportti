@@ -203,6 +203,20 @@ global.fetch = async (url, req) => {
     assert.strictEqual(by['2026-07-28'].src, 'Sentinel-2');
   });
 
+  await t('Sentinel-2: pilvimaski ensin – kokonaan pilvisestä kuvasta ei avata NIR-kaistaa', async () => {
+    const seen = [], real = global.fetch;
+    global.fetch = (url, req) => { seen.push(String(url)); return real(url, req); };
+    S2_ITEMS.push(s2ItemFx('S2A_MSIL2A_20260820T095031_N0511_R079_T35VLL_20260820T120000', '2026-08-20', 's2d', '05.11'));
+    try {
+      const r = await H.fetchS2(field, '2026-07-01', '2026-08-31', { bufferM: 10 });
+      const d = r.obs.find((o) => o.date === '2026-08-20');
+      assert.deepStrictEqual([d.value, d.valid], [null, 0], 'pilvinen päivä näkyy pois jätettynä');
+      assert.ok(seen.some((u) => u.includes('s2d.SCL.tif')), 'maski luettiin');
+      assert.ok(!seen.some((u) => u.includes('s2d.B08.tif')), 'NIR-kaistaa ei avattu');
+      assert.ok(seen.some((u) => u.includes('s2c.B08.tif')), 'selkeän kuvan NIR luettiin');
+    } finally { S2_ITEMS.pop(); global.fetch = real; }
+  });
+
   await t('Sentinel-2: SCL-luokat ja prosessointiversion siirtymä', () => {
     [4, 5].forEach((v) => assert.ok(H.sclValid(v)));
     [0, 1, 2, 3, 6, 7, 8, 9, 10, 11].forEach((v) => assert.ok(!H.sclValid(v), 'hylätään ' + v));

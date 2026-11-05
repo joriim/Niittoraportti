@@ -296,7 +296,7 @@
       ndviDrop: opts.ndviDrop == null ? 0.12 : opts.ndviDrop,
       minValid: opts.minValid == null ? 50 : opts.minValid,
       maxCloud: opts.maxCloud == null ? 90 : opts.maxCloud,
-      concurrency: opts.concurrency || 4,
+      concurrency: opts.concurrency || 6,
       signal: opts.signal || null,
       onProgress: opts.onProgress || function () {}
     };
@@ -354,20 +354,25 @@
     if (!b) return null;
     var a = item.assets || {};
     if (!a[b.red] || !a[b.nir] || !a.Fmask) throw new Error('HLS-kuvasta ' + item.id + ' puuttuu kaista (' + b.red + ', ' + b.nir + ' tai Fmask).');
-    var urls = await Promise.all([a[b.red].href, a[b.nir].href, a.Fmask.href].map(signHref));
-    var tiffs = await Promise.all(urls.map(function (u) { return openTiff(u, 'Planetary Computer (HLS-kuva)'); }));
-    var imgs = await Promise.all(tiffs.map(function (t) { return t.getImage(); }));
-    var epsg = epsgOf(imgs[0], epsgHint(item));
-    var fw = fieldWindow(imgs[0], epsg, field, o.bufferM);
+    var svc = 'Planetary Computer (HLS-kuva)', base = { date: dateOf(item.properties.datetime), src: b.src, fam: 'HLS', id: item.id };
+    // Pilvimaski ensin: Fmask on samassa 30 m ruudukossa kuin kaistat. Jos lohkolla ei ole yhtään
+    // kelvollista pikseliä, punaista ja NIR-kaistaa ei avata lainkaan (noin puolet kesän kuvista).
+    var fImg = await (await openTiff(await signHref(a.Fmask.href), svc)).getImage();
+    var fw = fieldWindow(fImg, epsgOf(fImg, epsgHint(item)), field, o.bufferM);
     if (!fw || !fw.n) return null;
+    var fm = (await fImg.readRasters({ window: fw.window, samples: [0] }))[0], any = false;
+    for (var j = 0; j < fm.length && !any; j++) any = fw.mask[j] && fmaskValid(fm[j]);
+    if (!any) return Object.assign(base, { ndvi: null, fw: fw, value: null, nValid: 0, maskOnly: true });
+    var urls = await Promise.all([a[b.red].href, a[b.nir].href].map(signHref));
+    var imgs = await Promise.all(urls.map(async function (u) { return (await openTiff(u, svc)).getImage(); }));
     var rs = await Promise.all(imgs.map(function (im) { return im.readRasters({ window: fw.window, samples: [0] }); }));
-    var red = rs[0][0], nir = rs[1][0], fm = rs[2][0], ndvi = new Float32Array(fw.w * fw.h);
+    var red = rs[0][0], nir = rs[1][0], ndvi = new Float32Array(fw.w * fw.h);
     for (var i = 0; i < ndvi.length; i++) {
       var R = red[i], N = nir[i];
       ndvi[i] = fw.mask[i] && fmaskValid(fm[i]) && R > 0 && N > 0 && R !== -9999 && N !== -9999 ? (N - R) / (N + R) : NaN;
     }
     var st = stats(ndvi, fw, null, 0);
-    return { date: dateOf(item.properties.datetime), src: b.src, fam: 'HLS', id: item.id, ndvi: ndvi, fw: fw, value: st.value, nValid: st.nValid };
+    return Object.assign(base, { ndvi: ndvi, fw: fw, value: st.value, nValid: st.nValid });
   }
 
   /** Hakee ja laskee HLS-havainnot. Palauttaa { obs, searched, skipped }. */
@@ -425,35 +430,41 @@
   async function s2Item(item, field, o) {
     var a = item.assets || {};
     if (!a.B04 || !a.B08 || !a.SCL) throw new Error('Sentinel-2-kuvasta ' + item.id + ' puuttuu kaista (B04, B08 tai SCL).');
-    var hasBlue = !!a.B02;
-    var urls = await Promise.all([a.B04.href, a.B08.href, a.SCL.href].concat(hasBlue ? [a.B02.href] : []).map(signHref));
-    var tiffs = await Promise.all(urls.map(function (u) { return openTiff(u, 'Planetary Computer (Sentinel-2-kuva)'); }));
-    var imgs = await Promise.all(tiffs.map(function (t) { return t.getImage(); }));
-    var epsg = epsgOf(imgs[0], epsgHint(item));
-    var fw = fieldWindow(imgs[0], epsg, field, o.bufferM);
+    var hasBlue = !!a.B02, svc = 'Planetary Computer (Sentinel-2-kuva)', base = { date: dateOf(item.properties.datetime), src: 'Sentinel-2', fam: 'S2', id: item.id };
+    // Pilvimaski ensin: B04:stä luetaan vain otsake (10 m ruudukko) ja SCL:stä lohkon alue. Jos yksikään
+    // lohkon pikseli ei osu kelvolliseen SCL-soluun, NIR- ja sinistä kaistaa ei avata eikä punaista lueta.
+    var head = await Promise.all([a.B04.href, a.SCL.href].map(async function (h) { return (await openTiff(await signHref(h), svc)).getImage(); }));
+    var fw = fieldWindow(head[0], epsgOf(head[0], epsgHint(item)), field, o.bufferM);
     if (!fw || !fw.n) return null;
-    var rs = await Promise.all([imgs[0], imgs[1]].concat(hasBlue ? [imgs[3]] : []).map(function (im) { return im.readRasters({ window: fw.window, samples: [0] }); }));
     // SCL on karkeammassa ruudukossa: luetaan sama alue ja haetaan kullekin 10 m pikselille sen 20 m solu.
-    var sImg = imgs[2], sRes = sImg.getResolution(), sOri = sImg.getOrigin();
+    var sImg = head[1], sRes = sImg.getResolution(), sOri = sImg.getOrigin();
     var x0 = fw.origin[0] + fw.window[0] * fw.res[0], y0 = fw.origin[1] + fw.window[1] * fw.res[1];
     var x1 = fw.origin[0] + fw.window[2] * fw.res[0], y1 = fw.origin[1] + fw.window[3] * fw.res[1];
     var sc0 = Math.max(0, Math.floor((x0 - sOri[0]) / sRes[0])), sr0 = Math.max(0, Math.floor((y0 - sOri[1]) / sRes[1]));
     var sc1 = Math.min(sImg.getWidth(), Math.ceil((x1 - sOri[0]) / sRes[0])), sr1 = Math.min(sImg.getHeight(), Math.ceil((y1 - sOri[1]) / sRes[1]));
     var sw = sc1 - sc0, scl = (await sImg.readRasters({ window: [sc0, sr0, sc1, sr1], samples: [0] }))[0];
+    var sclAt = function (i) {
+      var r = Math.floor(i / fw.w), c = i - r * fw.w;
+      var x = fw.origin[0] + (fw.window[0] + c + 0.5) * fw.res[0], y = fw.origin[1] + (fw.window[1] + r + 0.5) * fw.res[1];
+      var qc = Math.floor((x - sOri[0]) / sRes[0]) - sc0, qr = Math.floor((y - sOri[1]) / sRes[1]) - sr0;
+      return qc >= 0 && qr >= 0 && qc < sw && qr < sr1 - sr0 ? scl[qr * sw + qc] : 0;
+    };
+    var any = false;
+    for (var j = 0; j < fw.mask.length && !any; j++) any = fw.mask[j] && sclValid(sclAt(j));
+    if (!any) return Object.assign(base, { ndvi: null, fw: fw, value: null, nValid: 0, maskOnly: true });
+    var more = await Promise.all([a.B08.href].concat(hasBlue ? [a.B02.href] : []).map(async function (h) { return (await openTiff(await signHref(h), svc)).getImage(); }));
+    var rs = await Promise.all([head[0]].concat(more).map(function (im) { return im.readRasters({ window: fw.window, samples: [0] }); }));
     var red = rs[0][0], nir = rs[1][0], blue = hasBlue ? rs[2][0] : null, off = s2Offset(item), ndvi = new Float32Array(fw.w * fw.h);
     var blueMax = (o.blueMax != null ? o.blueMax : S2_BLUE_MAX) * 10000;
     for (var i = 0; i < ndvi.length; i++) {
       if (!fw.mask[i]) { ndvi[i] = NaN; continue; }
-      var r = Math.floor(i / fw.w), c = i - r * fw.w;
-      var x = fw.origin[0] + (fw.window[0] + c + 0.5) * fw.res[0], y = fw.origin[1] + (fw.window[1] + r + 0.5) * fw.res[1];
-      var qc = Math.floor((x - sOri[0]) / sRes[0]) - sc0, qr = Math.floor((y - sOri[1]) / sRes[1]) - sr0;
-      var sv = qc >= 0 && qr >= 0 && qc < sw && qr < sr1 - sr0 ? scl[qr * sw + qc] : 0;
+      var sv = sclAt(i);
       var R = red[i] - off, N = nir[i] - off;
       var hazy = blue && blue[i] - off > blueMax;
       ndvi[i] = sclValid(sv) && !hazy && red[i] > 0 && nir[i] > 0 && R > 0 && N > 0 ? (N - R) / (N + R) : NaN;
     }
     var st = stats(ndvi, fw, null, 0);
-    return { date: dateOf(item.properties.datetime), src: 'Sentinel-2', fam: 'S2', id: item.id, ndvi: ndvi, fw: fw, value: st.value, nValid: st.nValid };
+    return Object.assign(base, { ndvi: ndvi, fw: fw, value: st.value, nValid: st.nValid });
   }
 
   /** Hakee ja laskee Sentinel-2 L2A -havainnot. Palauttaa { obs, searched, skipped }. */
