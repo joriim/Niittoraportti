@@ -115,6 +115,38 @@
   function css(v){return getComputedStyle(root).getPropertyValue(v).trim()}
   var COL={HLS:'--accent',S2:'--blue',PS:'--warn',S1:'--violet',S1B:'--violet'};
   var NAME={HLS:'HLS',S2:'Sentinel-2',PS:'PlanetScope',S1:'S1-koherenssi',S1B:'S1 VH-takaisinsironta'};
+  // Ladattavien tiedostojen nimi: mittausväli_niittoraportti_lohkonumero, esim. 20250501_251015_niittoraportti_1641431471-2
+  function fileBase(){
+    var a=($('dStart').value||'').replace(/-/g,''), b=($('dEnd').value||'').replace(/-/g,'').slice(2);
+    var l=($('lohko').value||'').trim().replace(/[^\w-]+/g,'_')||'lohko';
+    return (a&&b?a+'_'+b+'_':'')+'niittoraportti_'+l;
+  }
+  // ---------- Kuvasarja (kuvasarja.js) ----------
+  // Lähteittäin säilytetyt NDVI-ruudut; näytetään ne, joiden päivä ja lähde ovat havaintotaulukossa.
+  var frameStore={}, chartGeom=null;
+  var seq=window.NiittoKuvat.create($('seq'),{fileBase:fileBase,minValid:50,onChange:function(f){setCursor(f)}});
+  function setFrames(srcs,frames){
+    srcs.forEach(function(s){delete frameStore[s]});
+    (frames||[]).forEach(function(f){(frameStore[f.src]=frameStore[f.src]||[]).push(f)});
+  }
+  function visibleFrames(obsAll){
+    var have={}; obsAll.forEach(function(o){have[o.src+'|'+o.date]=1});
+    var out=[]; Object.keys(frameStore).forEach(function(s){frameStore[s].forEach(function(f){if(have[f.src+'|'+f.date]) out.push(f)})});
+    return out;
+  }
+  // Kuvaajan pystyviiva näytettävän kuvan päivän kohdalla.
+  function setCursor(f){
+    var ln=$('chartCursor'), tx=$('chartCursorTxt'), g=chartGeom;
+    if(!ln||!tx) return;
+    var t=f&&Date.parse(f.date)/864e5, vis=!!(f&&g&&t>=g.x0-0.5&&t<=g.x1+0.5);
+    ln.setAttribute('visibility',vis?'visible':'hidden'); tx.setAttribute('visibility',vis?'visible':'hidden');
+    if(!vis) return;
+    var x=g.X(f.date); ln.setAttribute('x1',x); ln.setAttribute('x2',x);
+    tx.setAttribute('x',x); tx.setAttribute('text-anchor',x>g.W-80?'end':x<g.L+60?'start':'middle'); tx.textContent=C.fi(f.date).slice(0,-5);
+  }
+  $('chart').addEventListener('click',function(e){
+    var c=e.target.closest&&e.target.closest('circle[data-d]'); if(c) seq.goTo(c.getAttribute('data-d'),c.getAttribute('data-s'));
+  });
   var current=null, exampleOn=false;
   $('cropOk').addEventListener('change',function(){render()});
 
@@ -133,6 +165,7 @@
 
   function render(){
     var obsAll=readObs(), obs=mainObs(obsAll), p=readP(), muu=measureSel.isMuu();
+    seq.set(visibleFrames(obsAll));
     var lohko=$('lohko').value.trim()||'[kasvulohkon tunnus]';
     var rule=C.RULES[p.measure];
     $('ruleNote').textContent=rule?rule.note+' Lähde: peltovalvontaohje 2026.':'';
@@ -219,6 +252,7 @@
     current.lohkoaineisto={vuosi:parcelInfo.vuosi,kasvi:parcelInfo.kasvi,lahde:parcelInfo.lahde,kausi:season,toimenpide_vahvistettu:cs.conflict?cs.confirmed:null};
     setLen();
     drawChart(svg,res,null);
+    setCursor(seq.current());
   }
   // Tiivistelmä: näkeekö Ruokaviraston kaltainen seuranta (pelkät Sentinel-kuvat) niiton, ja miten se suhteutuu tähän raporttiin.
   var LIGHT_FI={green:'vihreä',yellow:'keltainen',red:'punainen'};
@@ -340,6 +374,7 @@
     var t=function(d){return Date.parse(d)/864e5};
     var ds=used.map(function(o){return o.date}).sort(), x0=t(ds[0]),x1=t(ds[ds.length-1]); if(x1===x0)x1=x0+1;
     var X=function(d){return L+(t(d)-x0)/(x1-x0)*(W-L-R)}, Y=function(v){return T+(1-Math.max(0,Math.min(1,v)))*(H-T-B)};
+    chartGeom={X:X,x0:x0,x1:x1,W:W,L:L};
     // VH-takaisinsironta (dB) piirretään oikealle asteikolle −30…−10 dB → 0…1.
     var yv=function(o){return o.fam==='S1B'?(o.value+30)/20:o.value};
     var mut=css('--muted'),line=css('--line'),acc=css('--accent');
@@ -355,7 +390,7 @@
     Object.keys(fams).forEach(function(f){
       var c=css(COL[f]), pts=fams[f].map(function(o){return X(o.date)+','+Y(yv(o))}).join(' ');
       s+='<polyline points="'+pts+'" fill="none" stroke="'+c+'" stroke-width="1.5"'+(f==='S1'||f==='S1B'?' stroke-dasharray="4 3"':'')+'/>';
-      fams[f].forEach(function(o){s+='<circle cx="'+X(o.date)+'" cy="'+Y(yv(o))+'" r="'+(f==='S1B'?3:4.5)+'" fill="'+c+'"'+(o.conflict?' stroke="'+css('--bad')+'" stroke-width="2"':'')+'><title>'+C.fi(o.date)+' '+esc(o.src)+' '+o.value+(o.id?' · '+esc(o.id):'')+(o.conflict?' · '+esc(o.conflict):'')+'</title></circle>'});
+      fams[f].forEach(function(o){s+='<circle data-d="'+esc(o.date)+'" data-s="'+esc(o.src)+'" cx="'+X(o.date)+'" cy="'+Y(yv(o))+'" r="'+(f==='S1B'?3:4.5)+'" fill="'+c+'"'+(o.conflict?' stroke="'+css('--bad')+'" stroke-width="2"':'')+'><title>'+C.fi(o.date)+' '+esc(o.src)+' '+o.value+(o.id?' · '+esc(o.id):'')+(o.conflict?' · '+esc(o.conflict):'')+'</title></circle>'});
     });
     // Kuukausiakseli: ohut viiva ja nimi jokaisen kuukauden alussa
     var KK=['tammi','helmi','maalis','huhti','touko','kesä','heinä','elo','syys','loka','marras','joulu'];
@@ -367,6 +402,8 @@
       s+='<line x1="'+xm+'" x2="'+xm+'" y1="'+(H-B)+'" y2="'+(H-B+5)+'" stroke="'+mut+'"/><text x="'+(xm+3)+'" y="'+(H-B+18)+'" font-size="'+FS+'" fill="'+mut+'">'+KK[mm]+'</text>';
     }
     if(!ticks) s+='<text x="'+L+'" y="'+(H-B+18)+'" font-size="'+FS+'" fill="'+mut+'">'+C.fi(ds[0])+'</text><text x="'+(W-R)+'" y="'+(H-B+18)+'" text-anchor="end" font-size="'+FS+'" fill="'+mut+'">'+C.fi(ds[ds.length-1])+'</text>';
+    s+='<line id="chartCursor" x1="0" x2="0" y1="'+(T-4)+'" y2="'+(H-B)+'" stroke="'+css('--ink')+'" stroke-width="2" visibility="hidden" pointer-events="none"/>'+
+       '<text id="chartCursorTxt" x="0" y="'+(T-8)+'" font-size="12" font-weight="600" fill="'+css('--ink')+'" visibility="hidden" pointer-events="none"></text>';
     svg.innerHTML=s;
     svg.setAttribute('aria-label','NDVI-aikasarja '+C.fi(ds[0])+'–'+C.fi(ds[ds.length-1])+(res.best?', tunnistettu niittoväli '+C.fi(res.best.start)+'–'+C.fi(res.best.end):''));
     $('legend').innerHTML=Object.keys(fams).map(function(f){return '<span><i style="background:var('+COL[f]+')"></i>'+NAME[f]+'</span>'}).join('')+'<span><i style="background:var(--accent);opacity:.35;border-radius:2px"></i>tunnistettu niittoväli</span>'+(rl?'<span><i style="background:var(--bad);border-radius:1px;width:3px"></i>määräpäivä</span>':'');
@@ -427,7 +464,7 @@
     if(!current) return;
     var blob=new Blob([JSON.stringify(current,null,2)],{type:'application/json'});
     var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-    a.download='niittoraportti_'+String(current.lohko).replace(/[^\w-]/g,'_')+'.json'; document.body.appendChild(a); a.click(); a.remove();
+    a.download=fileBase()+'.json'; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function(){URL.revokeObjectURL(a.href)},1000);
   });
 
@@ -481,7 +518,7 @@
   }
   function goStepButtons(){stepBtns.forEach(function(b){var i=+b.dataset.step;b.disabled=i>maxStep||(i>1&&!fieldState)})}
   function parseGeo(){
-    fieldState=null; psSel=null; psOrderBtn.disabled=true; psOrderBtn.textContent='2. Tilaa kuvat';
+    fieldState=null; psSel=null; frameStore={}; psOrderBtn.disabled=true; psOrderBtn.textContent='2. Tilaa kuvat';
     var t=geoEl.value.trim(); if(!t){geoMsg.textContent='';updateParcel();return}
     try{
       fieldState=HK.parseField(t);
@@ -657,9 +694,10 @@
   }
   stopBtn.addEventListener('click',function(){ if(ctrl) ctrl.abort(); if(pollTimer){clearTimeout(pollTimer);pollTimer=null;say('Tilauksen seuranta keskeytettiin. Jatka myöhemmin painikkeella Tarkista ja käsittele.','warn')} stopBtn.hidden=!busy });
 
-  function mergeObs(obs,srcs,label,alsoRemove){
+  function mergeObs(obs,srcs,label,alsoRemove,frames){
     if(exampleOn){tbody.innerHTML='';exampleOn=false}
     var removed=0, drop=srcs.concat(alsoRemove||[]);
+    setFrames(drop,frames);
     Array.prototype.slice.call(tbody.querySelectorAll('tr')).forEach(function(tr){
       var s=tr.querySelector('.s').value, empty=!tr.querySelector('.d').value&&tr.querySelector('.v').value==='';
       if(empty||drop.indexOf(s)>=0){ if(!empty&&srcs.indexOf(s)>=0) removed++; tr.remove() }
@@ -690,15 +728,15 @@
   async function fetchOne(kind,f,r){
     var label=kind==='hls'?'HLS':'Sentinel-2', fn=kind==='hls'?HK.fetchHls:HK.fetchS2;
     var o=fetchOpts(), key=cacheKey(kind,r,o);
-    if(resCache[key]){ say(label+': käytetään tämän istunnon aiempaa hakua samalle lohkolle ja aikavälille.','ok'); return resCache[key].obs }
+    if(resCache[key]){ say(label+': käytetään tämän istunnon aiempaa hakua samalle lohkolle ja aikavälille.','ok'); return resCache[key] }
     var li=say('Haetaan '+label+'-kuvat '+C.fi(r[0])+'–'+C.fi(r[1])+'…');
     o.onProgress=function(m,a,b){li.textContent=m; if(b) progSet(kind,a,b)};
     var res=await fn(f,r[0],r[1],o);
-    resCache[key]={obs:res.obs};
+    resCache[key]={obs:res.obs,frames:res.frames||[]};
     var nv=res.obs.filter(function(o){return o.value!=null}).length, n0=res.obs.length-nv;
     li.textContent=label+': '+res.searched+' kuvaa löytyi, '+nv+' päivältä saatiin lohkolta kelvollinen arvo'+(n0?', '+n0+' päivän kuvissa ei yhtään kelvollista pikseliä (näkyvät pois jätettyinä)':'')+'.';
     sayHidden(res.skipped,label);
-    return res.obs;
+    return resCache[key];
   }
   // ---------- Sentinel-1 (Copernicus Data Space) ----------
   var cdseId=$('cdseId'), cdseSecret=$('cdseSecret'), cdseRem=$('cdseRemember');
@@ -727,9 +765,9 @@
       var kinds=mode==='both'?['hls','s2']:[mode], ok=0, aborted=null; progReset();
       // Lähteet haetaan rinnakkain; kunkin tulos lisätään taulukkoon heti valmistuttuaan.
       var jobs=kinds.map(function(k){
-        return fetchOne(k,f,r).then(function(obs){
+        return fetchOne(k,f,r).then(function(got){
           var mine=k==='hls'?HLS_SRC:S2_SRC, other=mode==='both'?[]:(k==='hls'?S2_SRC:HLS_SRC);
-          mergeObs(obs,mine,k==='hls'?'HLS':'Sentinel-2',other); ok++;
+          mergeObs(got.obs,mine,k==='hls'?'HLS':'Sentinel-2',other,got.frames); ok++;
         },function(e){ if(ctrl&&ctrl.signal&&ctrl.signal.aborted) aborted=e; else say(e.message,'fail') });
       });
       if($('s1On').checked) jobs.push(fetchS1(f,r).then(function(s1){mergeObs(s1,['Sentinel-1 VH'],'Sentinel-1'); ok++},
@@ -773,7 +811,7 @@
         say('Tilaus '+id+' valmis ('+st.state+'). Lasketaan havainnot…');
         var res=await HK.psProcess(st.results,f,ids||[],fetchOpts());
         sayHidden(res.skipped,'PlanetScope');
-        mergeObs(res.obs,['PlanetScope'],'PlanetScope');
+        mergeObs(res.obs,['PlanetScope'],'PlanetScope',null,res.frames);
         if(st.state==='partial') say('Osa tilauksen kuvista epäonnistui Planetin päässä.','warn');
       }else if(st.state==='failed'||st.state==='cancelled'){
         throw new Error('Tilaus '+id+' päättyi tilaan '+st.state+'. '+(st.message||''));

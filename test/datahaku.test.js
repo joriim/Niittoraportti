@@ -172,6 +172,24 @@ global.fetch = async (url, req) => {
     assert.strictEqual(by['2026-08-15'].changed, 6);
   });
 
+  await t('kuvasarja: HLS-ruudut päivittäin, koko lohko ilman puskuria ja rajaus mukana', async () => {
+    const fr = hls.frames;
+    assert.deepStrictEqual(fr.map((f) => f.date), hls.obs.map((o) => o.date), 'samat päivät ja sama valinta kuin havainnoissa');
+    assert.deepStrictEqual(fr.map((f) => f.id), hls.obs.map((o) => o.id));
+    for (const f of fr) {
+      assert.strictEqual(f.ndvi.length, f.w * f.h);
+      assert.strictEqual(f.inside.length, f.w * f.h);
+      assert.ok(f.polys.length && f.res[0] > 0 && f.res[1] < 0 && f.epsg);
+      // Ruudun mediaani on havainnon arvo; kelvollisuus lasketaan koko lohkolta (ei puskuria).
+      assert.strictEqual(f.value, hls.obs.find((o) => o.date === f.date).value);
+      assert.ok(f.valid >= 0 && f.valid <= 100);
+    }
+    const f710 = fr.find((f) => f.date === '2026-07-10');
+    assert.strictEqual(f710.valid, 100);
+    assert.ok(f710.inside.reduce((a, b) => a + b, 0) >= 54, 'lohkon pikseleitä vähintään puskuroidun maskin verran');
+    assert.ok(fr.find((f) => f.date === '2026-07-20').valid < 100, 'pilvinen pohjoisosa näkyy harmaana');
+  });
+
   await t('reunapuskuri: pikselin keskipisteen on oltava vähintään puskurin päässä reunasta', async () => {
     const img = await (await GT.fromArrayBuffer((() => { const b = fs.readFileSync(path.join(FX, 'hls1.B04.tif')); return b.buffer.slice(b.byteOffset, b.byteOffset + b.length); })())).getImage();
     assert.strictEqual(H.fieldWindow(img, 32635, field, 0).n, 60);
@@ -356,6 +374,27 @@ global.fetch = async (url, req) => {
     assert.match(res.notes[0], /Ratatietoa ei saatu.*ASC\/DESC/);
     await assert.rejects(() => H.fetchS1(field, '2026-07-01', '2026-07-31', { id: '', secret: '' }, {}), /client id ja client secret/);
     global.fetch = real;
+  });
+
+  await t('kuvasarja: värit, skaalaus ja ZIP-paketin rakenne', async () => {
+    const K = require('../kuvasarja.js');
+    assert.deepStrictEqual(K.ndviColor(-1), [140, 109, 79]);
+    assert.deepStrictEqual(K.ndviColor(2), [20, 90, 44]);
+    assert.ok(K.ndviColor(0.8)[1] > K.ndviColor(0.8)[0], 'tiheä kasvusto vihreä');
+    assert.strictEqual(K.scaleOf({ w: 10, h: 8 }), 32);
+    assert.strictEqual(K.scaleOf({ w: 2000, h: 50 }), 1);
+    assert.strictEqual(K.crc32(new TextEncoder().encode('123456789')), 0xCBF43926);
+    const z = K.zip([{ name: 'a.txt', data: new TextEncoder().encode('hei') }, { name: 'b/ä.txt', data: new Uint8Array([1, 2, 3]) }]);
+    const dv = new DataView(z.buffer);
+    assert.strictEqual(dv.getUint32(0, true), 0x04034b50);
+    const eo = z.length - 22;
+    assert.strictEqual(dv.getUint32(eo, true), 0x06054b50);
+    assert.strictEqual(dv.getUint16(eo + 10, true), 2);
+    const cdOff = dv.getUint32(eo + 16, true), cdSize = dv.getUint32(eo + 12, true);
+    assert.strictEqual(cdOff + cdSize, eo);
+    assert.strictEqual(dv.getUint32(cdOff, true), 0x02014b50);
+    assert.strictEqual(new TextDecoder().decode(z.subarray(30, 35)), 'a.txt');
+    assert.strictEqual(new TextDecoder().decode(z.subarray(35, 38)), 'hei');
   });
 
   console.log(n + ' testiä läpi');

@@ -97,6 +97,35 @@ const item = (id, c, d, p, nir, e) => ({ id, collection: c, properties: { dateti
 
   assert.ok(!(await page.isVisible('#compare')), 'vertailu vasta, kun lähteitä on useampi');
   assert.match(await page.textContent('#facts'), /Niittoväli\s*10\.7\.–5\.8\./);
+  // Kuvasarja: kuvat aikajärjestyksessä, kuvaajan pystyviiva kulkee näytettävän päivän kohdalla
+  assert.ok(await page.isVisible('#seq'), 'kuvasarja näkyy haun jälkeen');
+  assert.match(await page.textContent('#seq .seq-dl'), /Lataa kaikki kuvat \(4, ZIP\)/);
+  const cx = () => page.$eval('#chartCursor', (l) => [l.getAttribute('visibility'), +l.getAttribute('x1')]);
+  assert.match(await page.textContent('#seq .seq-cap'), /10\.7\.2026 · HLS-S30/);
+  const c1 = await cx(); assert.strictEqual(c1[0], 'visible');
+  await page.click('#seq .seq-next');
+  assert.match(await page.textContent('#seq .seq-cap'), /5\.8\.2026/, '20.7. (33 % kelvollisia) ohitetaan oletuksena');
+  const c2 = await cx(); assert.ok(c2[1] > c1[1], 'viiva siirtyy oikealle');
+  await page.uncheck('#seq .seq-clear');
+  assert.match(await page.textContent('#seq .seq-cap'), /5\.8\.2026.*\(3\/4\)/, 'nykyinen kuva säilyy rajauksen vaihtuessa');
+  await page.click('#chart circle[data-d="2026-07-10"]');
+  assert.match(await page.textContent('#seq .seq-cap'), /10\.7\.2026 · HLS-S30.*\(1\/4\)/, 'pisteen napsautus siirtää sarjan');
+  assert.strictEqual((await cx())[1], c1[1]);
+  await page.click('#seq .seq-next');
+  assert.match(await page.textContent('#seq .seq-cap'), /20\.7\.2026 · HLS-L30.*lohkolla kelvollisia \d+ %/, 'pilvinen kuva mukana, kun rajaus on pois');
+  const [zipDl] = await Promise.all([page.waitForEvent('download'), page.click('#seq .seq-dl')]);
+  assert.strictEqual(zipDl.suggestedFilename(), '20260701_260831_niittoraportti_TESTI-1_kuvat.zip');
+  const zbuf = fs.readFileSync(await zipDl.path());
+  const names = []; for (let i = 0; i + 4 < zbuf.length; i++) if (zbuf.readUInt32LE(i) === 0x02014b50) { const nl = zbuf.readUInt16LE(i + 28); names.push(zbuf.subarray(i + 46, i + 46 + nl).toString()); }
+  assert.strictEqual(names.filter((n) => n.endsWith('.png')).length, 4);
+  assert.strictEqual(names.filter((n) => n.endsWith('.pgw')).length, 4);
+  assert.ok(names.includes('kuvat.csv') && names.includes('LUEMINUT.txt'));
+  if (process.env.SHOT_DIR) fs.writeFileSync(path.join(process.env.SHOT_DIR, 'kuvat.zip'), zbuf);
+  const [jsDl] = await Promise.all([page.waitForEvent('download'), page.click('#dlJson')]);
+  assert.strictEqual(jsDl.suggestedFilename(), '20260701_260831_niittoraportti_TESTI-1.json');
+  await page.click('#seq .seq-prev');
+  await page.$eval('#chartCard', (e) => e.scrollIntoView());
+  await page.screenshot({ path: path.join(process.env.SHOT_DIR || require('os').tmpdir(), 'selain_kuvasarja.png'), fullPage: false });
   await page.click('#stepNav button[data-step="2"]');
   await page.click('#psBox > summary'); // PlanetScope on neuvojille suljettuna
   await page.fill('#plKey', 'PLAK-testi');

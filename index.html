@@ -259,6 +259,23 @@ details.adv{margin-top:16px}
   #resCard{order:1} .split.s3 .vipu{order:2} #chartCard{order:3} #disc{order:4;margin:0!important} #advRes{order:5;margin:0} #tech{order:6;margin:0} #s3actions{order:7}
 }
 @media print{.mobbar,.rvmini a{display:none!important}#advRes{display:block}}
+/* Kuvasarja */
+.seq{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.seq-top{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px}
+.seq-h{font-size:15px;margin:0}
+.seq-stage{margin:10px 0;background:var(--surface-2);border-radius:8px;display:flex;justify-content:center;align-items:center;min-height:120px;padding:8px}
+.seq-cv{display:block;max-width:100%;max-height:420px;width:auto;height:auto;image-rendering:pixelated}
+.seq-ctl{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.seq-ctl .btn{min-height:40px}
+.seq-range{flex:1 1 140px;min-width:120px;width:auto;padding:0;border:0;background:none;accent-color:var(--accent)}
+.seq .seq-speed{width:auto;font-size:14px;padding:8px;min-height:40px}
+.seq-opts{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-top:10px}
+.seq-opts label{display:flex;gap:8px;align-items:center;font-weight:500;color:var(--ink);margin:0}
+.seq-opts label input{width:auto;margin:0}
+.seq-leg .seq-ramp{width:56px;border-radius:2px}
+.seq-leg .seq-edge{background:none;border:2px solid var(--ink);border-radius:2px}
+#chart circle[data-d]{cursor:pointer}
+@media print{.seq-ctl,.seq-opts{display:none}}
 </style>
 </head>
 <body data-tab="tyokalu">
@@ -592,6 +609,7 @@ details.adv{margin-top:16px}
           <h3 id="chartHead" style="margin-top:0">Kasvuston vihreys</h3>
           <svg id="chart" viewBox="0 0 720 280" role="img" aria-label="Havaintojen aikasarja"></svg>
           <div class="legend" id="legend"></div>
+          <div id="seq" class="seq" hidden></div>
         </section>
 
         <details class="adv advres" id="advRes" hidden>
@@ -786,6 +804,7 @@ python scripts/hae_havainnot.py --lohko lohko.geojson --alku 2026-05-01 --loppu 
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="config.js"></script>
 <script src="kartta.js"></script>
+<script src="kuvasarja.js"></script>
 <script src="sovellus.js"></script>
 </body>
 </html>

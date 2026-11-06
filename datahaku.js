@@ -182,12 +182,15 @@
     var c0 = Math.max(0, Math.floor((minx - o[0]) / res[0])), c1 = Math.min(W, Math.ceil((maxx - o[0]) / res[0]));
     var r0 = Math.max(0, Math.floor((maxy - o[1]) / res[1])), r1 = Math.min(H, Math.ceil((miny - o[1]) / res[1]));
     if (c1 <= c0 || r1 <= r0) return null;
-    var w = c1 - c0, h = r1 - r0, mask = new Uint8Array(w * h), n = 0;
+    var w = c1 - c0, h = r1 - r0, mask = new Uint8Array(w * h), inside = new Uint8Array(w * h), n = 0;
     for (var r = 0; r < h; r++) for (var c = 0; c < w; c++) {
       var x = o[0] + (c0 + c + 0.5) * res[0], y = o[1] + (r0 + r + 0.5) * res[1];
-      if (pointInPolys(x, y, polys) && (!bufferM || distToEdges(x, y, polys) >= bufferM)) { mask[r * w + c] = 1; n++; }
+      if (!pointInPolys(x, y, polys)) continue;
+      inside[r * w + c] = 1;
+      if (!bufferM || distToEdges(x, y, polys) >= bufferM) { mask[r * w + c] = 1; n++; }
     }
-    return { window: [c0, r0, c1, r1], w: w, h: h, mask: mask, n: n, origin: o, res: res, epsg: epsg };
+    // inside: lohkon pikselit ilman reunapuskuria ja polys rasterin koordinaatistossa (kuvasarjan piirtoon).
+    return { window: [c0, r0, c1, r1], w: w, h: h, mask: mask, inside: inside, polys: polys, n: n, origin: o, res: res, epsg: epsg };
   }
 
   // HLS v2 Fmask: bitti 0 sirrus, 1 pilvi, 2 pilven/varjon vieressä, 3 pilven varjo, 4 lumi/jää,
@@ -272,20 +275,42 @@
   // ja laskee muuttuneen osuuden edellisestä kelvollisesta havainnosta.
   // Kuvat, joissa lohkolla ei ole yhtään kelvollista pikseliä, palautetaan arvolla null ja
   // kelvollisuudella 0 %, jotta ne näkyvät pois jätettyjen listassa eivätkä katoa hiljaa.
-  function finalize(raw, opts) {
+  function pickDaily(raw) {
     var byDay = {};
     raw.forEach(function (o) {
       if (!o) return;
       var k = o.fam + '|' + o.date, cur = byDay[k];
       if (!cur || (cur.value == null && o.value != null) || (o.value != null && o.nValid > cur.nValid)) byDay[k] = o;
     });
-    var list = Object.keys(byDay).map(function (k) { return byDay[k]; }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+    return Object.keys(byDay).map(function (k) { return byDay[k]; }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+  }
+  function finalize(raw, opts) {
+    var list = pickDaily(raw);
     var prev = {};
     return list.map(function (o) {
       if (o.value == null) return { date: o.date, src: o.src, id: o.id, value: null, valid: 0, changed: null };
       var s = stats(o.ndvi, o.fw, prev[o.fam] || null, opts.ndviDrop);
       if (s.valid >= opts.minValid) prev[o.fam] = o;
       return { date: o.date, src: o.src, id: o.id, value: s.value, valid: s.valid, changed: s.changed };
+    });
+  }
+
+  /**
+   * Kuvasarjan ruudut: sama päiväkohtainen valinta kuin havainnoissa. ndvi kattaa koko lohkon
+   * ympäröivän suorakaiteen (NaN = pilvi, varjo tai ei dataa), inside on lohkon maski ilman
+   * reunapuskuria ja polys lohkon rajaus rasterin koordinaatistossa. Ei sisälly JSON-raporttiin.
+   */
+  function framesOf(raw) {
+    return pickDaily(raw).map(function (o) {
+      var fw = o.fw, n = 0, ok = 0;
+      if (o.disp) for (var i = 0; i < fw.inside.length; i++) if (fw.inside[i]) { n++; if (!isNaN(o.disp[i])) ok++; }
+      return {
+        date: o.date, src: o.src, fam: o.fam, id: o.id, value: o.value,
+        valid: o.disp && n ? Math.round(ok / n * 100) : 0,
+        w: fw.w, h: fw.h, ndvi: o.disp || null, inside: fw.inside, polys: fw.polys,
+        x0: fw.origin[0] + fw.window[0] * fw.res[0], y0: fw.origin[1] + fw.window[1] * fw.res[1],
+        res: [fw.res[0], fw.res[1]], epsg: fw.epsg
+      };
     });
   }
 
@@ -366,13 +391,14 @@
     var urls = await Promise.all([a[b.red].href, a[b.nir].href].map(signHref));
     var imgs = await Promise.all(urls.map(async function (u) { return (await openTiff(u, svc)).getImage(); }));
     var rs = await Promise.all(imgs.map(function (im) { return im.readRasters({ window: fw.window, samples: [0] }); }));
-    var red = rs[0][0], nir = rs[1][0], ndvi = new Float32Array(fw.w * fw.h);
+    var red = rs[0][0], nir = rs[1][0], ndvi = new Float32Array(fw.w * fw.h), disp = new Float32Array(fw.w * fw.h);
     for (var i = 0; i < ndvi.length; i++) {
       var R = red[i], N = nir[i];
-      ndvi[i] = fw.mask[i] && fmaskValid(fm[i]) && R > 0 && N > 0 && R !== -9999 && N !== -9999 ? (N - R) / (N + R) : NaN;
+      disp[i] = fmaskValid(fm[i]) && R > 0 && N > 0 && R !== -9999 && N !== -9999 ? (N - R) / (N + R) : NaN;
+      ndvi[i] = fw.mask[i] ? disp[i] : NaN;
     }
     var st = stats(ndvi, fw, null, 0);
-    return Object.assign(base, { ndvi: ndvi, fw: fw, value: st.value, nValid: st.nValid });
+    return Object.assign(base, { ndvi: ndvi, disp: disp, fw: fw, value: st.value, nValid: st.nValid });
   }
 
   /** Hakee ja laskee HLS-havainnot. Palauttaa { obs, searched, skipped }. */
@@ -388,7 +414,7 @@
       done++; o.onProgress('HLS: ' + done + '/' + items.length + ' kuvaa käsitelty', done, items.length);
       return r;
     }, o.signal);
-    return { obs: finalize(raw, o), searched: items.length, skipped: skipped };
+    return { obs: finalize(raw, o), frames: framesOf(raw), searched: items.length, skipped: skipped };
   }
 
   // ---------- Sentinel-2 L2A (Planetary Computer) ----------
@@ -456,15 +482,16 @@
     var rs = await Promise.all([head[0]].concat(more).map(function (im) { return im.readRasters({ window: fw.window, samples: [0] }); }));
     var red = rs[0][0], nir = rs[1][0], blue = hasBlue ? rs[2][0] : null, off = s2Offset(item), ndvi = new Float32Array(fw.w * fw.h);
     var blueMax = (o.blueMax != null ? o.blueMax : S2_BLUE_MAX) * 10000;
+    var disp = new Float32Array(fw.w * fw.h);
     for (var i = 0; i < ndvi.length; i++) {
-      if (!fw.mask[i]) { ndvi[i] = NaN; continue; }
       var sv = sclAt(i);
       var R = red[i] - off, N = nir[i] - off;
       var hazy = blue && blue[i] - off > blueMax;
-      ndvi[i] = sclValid(sv) && !hazy && red[i] > 0 && nir[i] > 0 && R > 0 && N > 0 ? (N - R) / (N + R) : NaN;
+      disp[i] = sclValid(sv) && !hazy && red[i] > 0 && nir[i] > 0 && R > 0 && N > 0 ? (N - R) / (N + R) : NaN;
+      ndvi[i] = fw.mask[i] ? disp[i] : NaN;
     }
     var st = stats(ndvi, fw, null, 0);
-    return Object.assign(base, { ndvi: ndvi, fw: fw, value: st.value, nValid: st.nValid });
+    return Object.assign(base, { ndvi: ndvi, disp: disp, fw: fw, value: st.value, nValid: st.nValid });
   }
 
   /** Hakee ja laskee Sentinel-2 L2A -havainnot. Palauttaa { obs, searched, skipped }. */
@@ -480,7 +507,7 @@
       done++; o.onProgress('Sentinel-2: ' + done + '/' + items.length + ' kuvaa käsitelty', done, items.length);
       return r;
     }, o.signal);
-    return { obs: finalize(raw, o), searched: items.length, skipped: skipped };
+    return { obs: finalize(raw, o), frames: framesOf(raw), searched: items.length, skipped: skipped };
   }
 
 
@@ -754,25 +781,26 @@
         if (fw && fw.n) {
           var a = await sr.readRasters({ window: fw.window, samples: [2, 3] });
           var u = await udm.readRasters({ window: fw.window, samples: [0] });
-          var ndvi = new Float32Array(fw.w * fw.h);
+          var ndvi = new Float32Array(fw.w * fw.h), disp = new Float32Array(fw.w * fw.h);
           for (var i = 0; i < ndvi.length; i++) {
             var R = a[0][i], N = a[1][i];
-            ndvi[i] = fw.mask[i] && u[0][i] === 1 && R > 0 && N > 0 ? (N - R) / (N + R) : NaN;
+            disp[i] = u[0][i] === 1 && R > 0 && N > 0 ? (N - R) / (N + R) : NaN;
+            ndvi[i] = fw.mask[i] ? disp[i] : NaN;
           }
           var st = stats(ndvi, fw, null, 0);
-          out = { date: p.id.slice(0, 4) + '-' + p.id.slice(4, 6) + '-' + p.id.slice(6, 8), src: 'PlanetScope', fam: 'PS', id: p.id, ndvi: ndvi, fw: fw, value: st.value, nValid: st.nValid };
+          out = { date: p.id.slice(0, 4) + '-' + p.id.slice(4, 6) + '-' + p.id.slice(6, 8), src: 'PlanetScope', fam: 'PS', id: p.id, ndvi: ndvi, disp: disp, fw: fw, value: st.value, nValid: st.nValid };
         }
       } catch (e) { skipped.push(p.id + ': ' + e.message); }
       done++; o.onProgress('PlanetScope: ' + done + '/' + list.length + ' kuvaa käsitelty', done, list.length);
       return out;
     }, o.signal);
-    return { obs: finalize(raw, o), skipped: skipped };
+    return { obs: finalize(raw, o), frames: framesOf(raw), skipped: skipped };
   }
 
   var api = {
     parseField: parseField, toUtm: toUtm, toLonLat: toLonLat, reproject: reproject,
     pointInPolys: pointInPolys, distToEdges: distToEdges, fieldWindow: fieldWindow,
-    fmaskValid: fmaskValid, median: median, stats: stats, finalize: finalize,
+    fmaskValid: fmaskValid, median: median, stats: stats, finalize: finalize, framesOf: framesOf,
     hlsSearch: hlsSearch, fetchHls: fetchHls, signHref: signHref,
     s2Search: s2Search, fetchS2: fetchS2, sclValid: sclValid, s2Offset: s2Offset,
     fetchS1: fetchS1, s1Request: s1Request, s1Parse: s1Parse, s1Tracks: s1Tracks, s1Catalog: s1Catalog, cdseToken: cdseToken, _clearCdse: function () { cdseCache = {}; },

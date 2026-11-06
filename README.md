@@ -19,6 +19,7 @@ Kaikki laskenta tapahtuu selaimessa. Vain datahaussa ja lohkon valinnassa tietoa
 | `sovellus.js` | työkalun käyttöliittymä |
 | `core.js` | tunnistuslogiikka ilman DOM-riippuvuuksia |
 | `datahaku.js` | HLS-, Sentinel-2-, Sentinel-1- ja PlanetScope-haku sekä pikselilaskenta selaimessa |
+| `kuvasarja.js` | kuvasarja: lohkon NDVI-kuvat aikajärjestyksessä, toisto ja kaikkien kuvien lataus (ZIP: PNG + .pgw + kuvat.csv) |
 | `kartta.js` | lohkon valinta: peruslohkotunnus, kartta (MML, Ruokavirasto) ja piirto |
 | `config.js` | asetukset: Ruokaviraston rajapinnan välityspalvelimen osoite |
 | `worker/` | Cloudflare Worker, joka välittää Ruokaviraston kasvulohkokyselyt ja tarvittaessa Copernicus Data Space -kutsut selaimelle (ohje `worker/README.md`) |
@@ -128,3 +129,11 @@ PolyForm-ehtojen lisäksi lisenssinantaja myöntää maksuttoman, ei-siirrettäv
 Lisälupaan sovelletaan PolyForm-lisenssin Notices-, Patent Defense-, Violations- ja No Liability -kohtia.
 
 Tämä suomenkielinen kuvaus on tiivistelmä. Sitovat ehdot ovat [LICENSE.md](LICENSE.md)-tiedostossa ja yllä olevassa lisäluvassa.
+
+## Kuvasarja ja tiedostojen nimet
+
+Haun jälkeen tuloskortissa on *Kuvasarja*. Siinä näkyvät lohkon NDVI-kuvat (HLS, Sentinel-2 ja PlanetScope) aikajärjestyksessä. Kuvat voi selata tai toistaa, ja kuvaajan pystyviiva kulkee näytettävän päivän kohdalla. Kuvaajan pisteen napsautus siirtää sarjan kyseisen päivän kuvaan. Oletuksena näytetään vain kuvat, joissa vähintään 50 % lohkosta näkyy.
+
+*Lataa kaikki kuvat* tekee ZIP-paketin, jossa on jokaisesta kuvasta PNG ja world file (.pgw), kuvaluettelo `kuvat.csv` (päivä, lähde, tunniste, NDVI-mediaani, kelvolliset %, EPSG) ja `LUEMINUT.txt`.
+
+Ladattavat tiedostot nimetään muotoon `mittausväli_niittoraportti_lohkonumero`, esim. `20250501_251015_niittoraportti_1641431471-2.json` ja `20250501_251015_niittoraportti_1641431471-2_kuvat.zip`. Mittausväli on hakujakson alku (VVVVKKPP) ja loppu (VVKKPP).
