@@ -142,12 +142,12 @@
     ln.setAttribute('visibility',vis?'visible':'hidden'); tx.setAttribute('visibility',vis?'visible':'hidden');
     if(!vis) return;
     var x=g.X(f.date); ln.setAttribute('x1',x); ln.setAttribute('x2',x);
-    tx.setAttribute('x',x); tx.setAttribute('text-anchor',x>g.W-80?'end':x<g.L+60?'start':'middle'); tx.textContent=C.fi(f.date).slice(0,-5);
+    tx.setAttribute('x',x); tx.setAttribute('text-anchor',x>g.W-80?'end':x<g.L+60?'start':'middle'); tx.textContent=C.fi(f.date).slice(0,-4);
   }
   $('chart').addEventListener('click',function(e){
     var c=e.target.closest&&e.target.closest('circle[data-d]'); if(c) seq.goTo(c.getAttribute('data-d'),c.getAttribute('data-s'));
   });
-  var current=null, exampleOn=false;
+  var current=null, exampleOn=false, lastRes=null, koontiBusy=false;
   $('cropOk').addEventListener('change',function(){render()});
 
   function seasonYear(){ var v=($('dStart')||{}).value||''; return parseInt(v.slice(0,4),10)||null }
@@ -259,6 +259,7 @@
       $('outEmpty').textContent='Teksti muodostuu, kun havainnot on haettu.';setLen();return;
     }
     var res=C.analyze(obs,p);
+    lastRes=res;
     renderNear(obs,p,res);
     current={ohjelma:'Niittoraportti',versio:res.version,laadittu:new Date().toISOString().slice(0,10),lohko:lohko,toimenpide:p.measure,
       tulos:res.verdict,parametrit:res.params,tapahtumat:res.events.map(slimEv),hylatyt_pudotukset:res.rejected.map(function(r){return {lahde:r.fam,alku:r.start,loppu:r.end,pudotus:r.drop,syy:r.reason}}),
@@ -360,7 +361,7 @@
   }
   function slimEv(e){return {alku:e.start,loppu:e.end,luottamus:e.conf,hyvaksytty:e.accepted,lahteet:e.fams,tarkistukset:e.checks,
     tunnistukset:e.dets.map(function(d){return {lahde:d.fam,alku:d.start,loppu:d.end,ennen:{paiva:d.before.date,tunniste:d.before.id,arvo:d.before.value},jalkeen:{paiva:d.after.date,tunniste:d.after.id,arvo:d.after.value},pudotus:d.drop,z:d.z,pysyvyys:d.persistence,muuttunut:d.changed,luottamus:Math.round(d.conf*100)/100}})}}
-  function setLen(){var o=$('out');$('outLen').textContent=o.value?'('+o.value.length+' merkkiä)':'';$('copy').disabled=!o.value;$('dlJson').disabled=!current;$('printBtn').disabled=!current;updateMobBar()}
+  function setLen(){var o=$('out');$('outLen').textContent=o.value?'('+o.value.length+' merkkiä)':'';$('copy').disabled=!o.value;$('dlJson').disabled=!current;$('dlHtml').disabled=!current||koontiBusy;$('printBtn').disabled=!current;updateMobBar()}
 
   // ---------- Mobiilin alapalkki: vaiheen pääpainike aina peukalon ulottuvilla ----------
   var mobAct=null, mobMQ=window.matchMedia?matchMedia('(max-width: 899px)'):{matches:false};
@@ -536,6 +537,73 @@
     var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
     a.download=fileBase()+'.json'; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function(){URL.revokeObjectURL(a.href)},1000);
+  });
+
+  // ---------- Koonti: yksi HTML-tiedosto liitteeksi (koonti.js) ----------
+  // Kuvaaja piirretään vaalealla teemalla irralliseen SVG:hen; videossa pystyviiva siirretään kunkin kuvan päivään.
+  function exportChart(res){
+    var prev=root.getAttribute('data-theme'); root.setAttribute('data-theme','light');
+    var svg=document.createElementNS('http://www.w3.org/2000/svg','svg'), geom, legend;
+    try{ drawChart(svg,res,null); geom=chartGeom; legend=$('legend').innerHTML; }
+    finally{ if(prev==null) root.removeAttribute('data-theme'); else root.setAttribute('data-theme',prev); render(); }
+    svg.setAttribute('font-family','Inter, system-ui, sans-serif');
+    var ln=svg.querySelector('#chartCursor'), tx=svg.querySelector('#chartCursorTxt');
+    function at(f){
+      var t=f&&Date.parse(f.date)/864e5, vis=!!(f&&t>=geom.x0-0.5&&t<=geom.x1+0.5);
+      [ln,tx].forEach(function(e){e.setAttribute('visibility',vis?'visible':'hidden')});
+      if(vis){var x=geom.X(f.date);ln.setAttribute('x1',x);ln.setAttribute('x2',x);tx.setAttribute('x',x);tx.setAttribute('text-anchor',x>geom.W-80?'end':x<geom.L+60?'start':'middle');tx.textContent=C.fi(f.date).slice(0,-4)}
+      return new XMLSerializer().serializeToString(svg);
+    }
+    var inline=at(null);
+    return {inline:inline, at:at, legend:legend};
+  }
+  async function buildKoonti(progress){
+    var KO=window.NiittoKoonti, KS=window.NiittoKuvat, res=lastRes, rep=current;
+    var minValid=readP().minValid||C.DEFAULTS.minValid;
+    var frames=visibleFrames(readObs()).sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:a.src<b.src?-1:1});
+    var ch=exportChart(res);
+    progress('Piirretään kuvat…');
+    var gal=frames.map(function(f){var cv=document.createElement('canvas');KS.drawFrame(cv,f);return {date:f.date,src:f.src,id:f.id,value:f.value,valid:f.valid,png:cv.toDataURL('image/png')}});
+    var vFrames=frames.filter(function(f){return f.valid>=minValid}); if(!vFrames.length) vFrames=frames;
+    var video=null, videoNote;
+    if(!frames.length) videoNote='Videota ei ole, koska lohkon kuvia ei ole haettu tässä istunnossa (havainnot tuotiin taulukkoon tai CSV:nä). Hae kuvat vaiheessa 2.';
+    else{
+      var title='Kasvulohko '+(rep.lohko||'')+(rep.toimenpide?' · '+rep.toimenpide:'');
+      var v=await KO.recordVideo(vFrames,ch.at,{title:title,perFrame:900,onProgress:progress});
+      if(v){ progress('Pakataan videota…'); video={dataUrl:await KO.blobToDataUrl(v.blob),mime:v.mime,seconds:v.seconds};
+        videoNote='Lohkon NDVI-kuvat aikajärjestyksessä'+(vFrames.length<frames.length?' (vain selkeät kuvat, joissa lohkosta näkyy ≥ '+minValid+' %)':'')+'. Kuvaajan pystyviiva kulkee kuvan päivän kohdalla.'+(v.mime==='video/webm'?' Muoto WebM: toistuu Chromessa, Edgessä ja Firefoxissa sekä Safarissa 14.1:stä alkaen.':'');
+      } else videoNote='Tämä selain ei pysty tallentamaan videota. Kuvat ovat alla aikajärjestyksessä.';
+    }
+    var notes=[];
+    Array.prototype.forEach.call(document.querySelectorAll('#bigwarns .bigwarn'),function(b){notes.push({cls:'',html:b.innerHTML})});
+    if(!$('rvMini').hidden) notes.push({cls:'blue',html:esc($('rvMini').querySelector('strong')?$('rvMini').querySelector('strong').textContent:'')+'<div class="small">'+esc(($('rvMini').querySelector('.small')||{}).textContent||'').replace(/\s*Katso seuranta$/,'')+'</div>'});
+    if(!$('nearBox').hidden&&rep.poikkeavat_asetukset) notes.push({cls:'',html:'<strong>Tulos perustuu oletuksista poikkeaviin asetuksiin.</strong> Ks. Tiedot.'});
+    else if(!$('nearBox').hidden&&rep.herkkyysanalyysi) notes.push({cls:'blue',html:'<strong>Lähellä todennäköisyysrajaa.</strong> '+esc((sensCache&&sensCache.results[0]&&sensCache.results[0].blocker&&sensCache.results[0].blocker.teksti)||'')+' Löysennykset, jotka muuttaisivat tuloksen, ovat kohdassa Tiedot.'});
+    var facts=Array.prototype.map.call(document.querySelectorAll('#facts > div'),function(d){return [d.querySelector('dt').textContent,d.querySelector('dd').textContent]});
+    var checks=Array.prototype.map.call(document.querySelectorAll('#checks > li'),function(li){return {s:li.className,t:li.textContent.trim()}}).filter(function(c){return c.t});
+    var params=Object.keys(rep.parametrit||{}).filter(function(k){var v=rep.parametrit[k];return v!=null&&typeof v!=='object'}).map(function(k){return [k,String(rep.parametrit[k])]});
+    progress('Kootaan tiedostoa…');
+    return KO.buildHtml({
+      title:'Niittoraportti, kasvulohko '+(rep.lohko||''), meta:$('resMeta').textContent+' · hakujakso '+C.fi($('dStart').value||'')+'–'+C.fi($('dEnd').value||''),
+      verdict:{level:rep.tulos.level,label:rep.tulos.label,detail:rep.tulos.detail}, facts:facts, notes:notes,
+      vipu:$('out').value, vipuWhy:$('outEmpty').textContent.replace(/\.$/,''),
+      chartSvg:ch.inline, legendHtml:ch.legend, video:video, videoNote:videoNote,
+      frames:gal, minValid:minValid, rampCss:KS.gradientCss(),
+      obs:rep.havainnot, excluded:rep.pois_jatetyt_havainnot, events:rep.tapahtumat, checks:checks, params:params,
+      changed:rep.poikkeavat_asetukset, sens:rep.herkkyysanalyysi, report:rep,
+      version:rep.versio, created:new Date().toLocaleString('fi-FI'), fileBase:fileBase()
+    });
+  }
+  $('dlHtml').addEventListener('click',async function(){
+    if(!current||!lastRes||koontiBusy) return;
+    var btn=this, t0=btn.textContent; koontiBusy=true; btn.disabled=true;
+    try{
+      var html=await buildKoonti(function(m){btn.textContent=m});
+      var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'}));
+      a.download=fileBase()+'.html'; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function(){URL.revokeObjectURL(a.href)},10000);
+    }catch(e){ window.console&&console.error(e); btn.textContent='Koonti epäonnistui: '+e.message; await new Promise(function(r){setTimeout(r,4000)}) }
+    finally{ koontiBusy=false; btn.textContent=t0; btn.disabled=!current }
   });
 
   // ---------- Datahaku (datahaku.js) ----------

@@ -238,6 +238,6 @@
     };
   }
 
-  var api = { ndviColor: ndviColor, scaleOf: scaleOf, drawFrame: drawFrame, crc32: crc32, zip: zip, buildZip: buildZip, create: create };
+  var api = { gradientCss: gradientCss, ndviColor: ndviColor, scaleOf: scaleOf, drawFrame: drawFrame, crc32: crc32, zip: zip, buildZip: buildZip, create: create };
   if (typeof module === 'object' && module.exports) module.exports = api; else root.NiittoKuvat = api;
 })(typeof self !== 'undefined' ? self : this);

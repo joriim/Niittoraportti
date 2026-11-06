@@ -19,6 +19,7 @@ Kaikki laskenta tapahtuu selaimessa. Vain datahaussa ja lohkon valinnassa tietoa
 | `sovellus.js` | työkalun käyttöliittymä |
 | `core.js` | tunnistuslogiikka ilman DOM-riippuvuuksia |
 | `datahaku.js` | HLS-, Sentinel-2-, Sentinel-1- ja PlanetScope-haku sekä pikselilaskenta selaimessa |
+| `koonti.js` | koonti: yksi itsenäinen HTML-tiedosto (tulos, Vipu-teksti, kuvaaja, video, kuvat ja tiedot) |
 | `kuvasarja.js` | kuvasarja: lohkon NDVI-kuvat aikajärjestyksessä, toisto ja kaikkien kuvien lataus (ZIP: PNG + .pgw + kuvat.csv) |
 | `kartta.js` | lohkon valinta: peruslohkotunnus, kartta (MML, Ruokavirasto) ja piirto |
 | `config.js` | asetukset: Ruokaviraston rajapinnan välityspalvelimen osoite |
@@ -141,3 +142,18 @@ Ladattavat tiedostot nimetään muotoon `mittausväli_niittoraportti_lohkonumero
 ## Lähellä todennäköisyysrajaa
 
 Jos niittoa ei tunnisteta, mutta varmin tapahtuma jää lähelle todennäköisyysrajaa, tuloskortti näyttää, minkä lisäasetuksen löysentäminen muuttaisi tuloksen. Löysennykset järjestetään perusteltavuuden mukaan (perusteltu, kohtalainen, heikko, ei perusteltu), ja jokaiselle näytetään perustelu ja este, joka perustasolla esti tunnistuksen. *Kokeile* ottaa löysennyksen käyttöön. Oletuksista poikkeavat asetukset kirjataan raporttiin ja Vipu-tekstiin. Menetelmä on kuvattu tiedostossa `METHOD.md`.
+
+## Koonti liitteeksi
+
+*Lataa koonti (HTML)* tekee yhden tiedoston (`mittausväli_niittoraportti_lohkonumero.html`), joka avautuu missä tahansa selaimessa ilman verkkoyhteyttä ja jonka voi lähettää sähköpostin liitteenä. Siinä ovat:
+
+- tulos, avainluvut ja huomautukset
+- Vipu-teksti
+- kuvaaja
+- video, jossa lohkon selkeät NDVI-kuvat näytetään aikajärjestyksessä ja kuvaajan pystyviiva kulkee kuvan päivän kohdalla
+- kaikki kuvat galleriana
+- tapahtumat, tarkistukset ja havaintotaulukko
+- poikkeavat asetukset ja herkkyysanalyysi
+- koko raportti JSONina
+
+Video tallennetaan selaimessa (MediaRecorder, yleensä WebM), ja sen tekeminen kestää noin sekunnin kuvaa kohden.
