@@ -380,7 +380,7 @@
       if (!best || fails < bestF || (fails === bestF && e.conf > best.conf)) { best = e; bestF = fails; }
     });
     var verdict;
-    if (!best) verdict = { level: 'none', label: 'Niittoa ei tunnistettu', detail: 'Yksikään tapahtuma ei ylittänyt todennäköisyysrajaa ' + p.confMin + '.' };
+    if (!best) verdict = { level: 'none', label: 'Niittoa ei tunnistettu', detail: 'Yksikään tapahtuma ei ylittänyt todennäköisyysrajaa ' + Number(p.confMin).toFixed(2).replace('.', ',') };
     else {
       var nf = best.checks.filter(function (c) { return c.s === 'fail'; }).length;
       var nw = best.checks.filter(function (c) { return c.s === 'warn'; }).length;
@@ -734,7 +734,97 @@
     return parts.join(' ');
   }
 
-  var api = { VERSION: VERSION, FAMILY: FAMILY, SOURCES: SOURCES, RULES: RULES, DEFAULTS: DEFAULTS, analyze: analyze, reportText: reportText, fi: fi, compareSources: compareSources, SCENARIOS: SCENARIOS,
+  // ---------- Herkkyysanalyysi: lähellä todennäköisyysrajaa ----------
+  // Kun niittoa ei tunnisteta (tai tukiehto kaatuu muuttuneeseen osuuteen), kokeillaan, minkä asetuksen
+  // löysentäminen muuttaisi tuloksen. Jokaisella löysennyksellä on perusteltavuus ja perustelu, jotta
+  // neuvoja voi erottaa menetelmällisesti perustellun valinnan tuloksen hakemisesta. Tulos ei muuta
+  // raporttia: asetuksen vaihtaminen on aina käyttäjän valinta, ja se kirjautuu raportin parametreihin.
+  var GRADES = ['perusteltu', 'kohtalainen', 'heikko', 'ei perusteltu'];
+  var LOOSEN = [
+    { k: 'persistWindow', to: 14, grade: 'perusteltu', label: 'Pysyvyysikkuna',
+      why: 'Nurmen jälkikasvu näkyy NDVI:ssä vasta 2–4 viikossa, joten 14 vrk:n päässä oleva havainto kertoo vielä, pysyikö kasvusto matalana. Ikkuna ei hyväksy pudotusta, joka palautuu, vaan antaa pysyvyydelle uuden tarkistuskuvan.' },
+    { k: 'confMin', to: 0.5, grade: 'kohtalainen', label: 'Todennäköisyysraja',
+      why: 'Sen4CAP-menetelmässä (De Vroey ym. 2022) jokainen kynnyksen ylittävä optinen pudotus saa luottamuksen vähintään 0,5. Raja 0,6 on tämän sovelluksen oma lisävarmistus, ja 0,5 hyväksyy pudotuksen, jota heikentää esim. varmistamaton pysyvyys tai pitkä havaintoväli.' },
+    { k: 'minValid', to: 35, grade: 'kohtalainen', label: 'Kelvolliset pikselit',
+      why: 'Osittain pilvisestä kuvasta lasketaan mediaani vain näkyvästä osasta. Kun näkyvissä on vähintään noin kolmannes lohkosta, mediaani kuvaa kasvustoa, mutta näyttö koskee vain näkyvää osaa. Tarkista kuvasarjasta, ettei pilven reuna tai varjo osu näkyvälle alueelle.' },
+    { k: 's1k', to: 4, grade: 'kohtalainen', label: 'S1-kynnys kσ',
+      why: 'z = 4 vastaa väärän hälytyksen todennäköisyyttä noin 3·10⁻⁵ kuvausta kohden, mikä on yhä pieni. Sen4CAP:n 5,0 (P_fa 3·10⁻⁷) on varovainen valinta laajaan seurantaan, jossa lohkoja on miljoonia.' },
+    { k: 'minChanged', to: 80, grade: 'kohtalainen', label: 'Muuttunut osuus', onlyFail: true,
+      why: 'Osa lohkon pikseleistä on sekapikseleitä ojien, pientareiden ja puiden varjojen kohdalla, ja niiden NDVI muuttuu niitossa vähemmän. 80 % muuttunut ala sopii koko lohkon niittoon, jos pudotus on selvä. Tarkista kuvasarjasta, ettei muuttumaton osa ole yhtenäinen niittämätön kaista.' },
+    { k: 'ndviDrop', to: 0.10, grade: 'heikko', label: 'NDVI-pudotus',
+      why: 'Kirjallisuuden kynnys pohjoisille maille on 0,12 (De Vroey ym. 2022). Pienempi kynnys löytää myös kuivuuden, tuleentumisen ja pilviharson aiheuttamia pudotuksia, joten löysennys vaatii muun näytön (kuva, toinen lähde).' },
+    { k: 'maxGap', to: 75, grade: 'ei perusteltu', label: 'Suurin havaintoväli',
+      why: 'Yli 60 vrk:n välillä niittoa ei voi ajoittaa eikä pudotusta erottaa tuleentumisesta (De Vroey ym. 2022: Δt_max 60 vrk). Pitkä katve korjataan lisälähteellä (PlanetScope, Sentinel-1), ei löysentämällä.' }
+  ];
+  var LOWER = { confMin: 1, minValid: 1, s1k: 1, minChanged: 1, ndviDrop: 1 };
+  function looser(c, p) { return LOWER[c.k] ? c.to < p[c.k] : c.to > p[c.k]; }
+  function gradeRank(g) { return GRADES.indexOf(g); }
+  function okResult(r) { return !!r.best && r.verdict.level !== 'fail'; }
+  function fmtNum(v) { return String(v).replace('.', ','); }
+
+  // Miksi tapahtuma ei perustasolla mennyt läpi: alle rajan jäänyt tapahtuma, hylätty pudotus,
+  // pois jätetty havainto, kynnyksen alle jäänyt pudotus tai hylkäävä tarkistus.
+  function blocker(base, ev, p, set) {
+    var exIn = base.excluded.filter(function (x) { return x.obs.date >= ev.start && x.obs.date <= ev.end; });
+    if (exIn.length && (set || []).some(function (c) { return c.k === 'minValid'; })) {
+      var x0 = exIn[0], h0 = base.events.filter(function (e) { return overlap(e, ev); })[0];
+      return { tyyppi: 'pois jätetty', teksti: 'Havainto ' + fi(x0.obs.date) + ' (' + x0.obs.src + ') jätettiin pois: ' + x0.reason + '.' +
+        (h0 ? ' Ilman sitä tapahtuma ' + fi(h0.start) + '–' + fi(h0.end) + ' sai luottamuksen ' + fmtNum(h0.conf) + '.' : '') };
+    }
+    var hit = base.events.filter(function (e) { return overlap(e, ev); }).sort(function (a, b) { return b.conf - a.conf; })[0];
+    if (hit && hit.accepted) {
+      var f = (hit.checks || []).filter(function (c) { return c.s === 'fail'; }).map(function (c) { return c.t; });
+      if (f.length) return { tyyppi: 'tukiehto', teksti: f.join(' ') };
+    }
+    if (hit) {
+      var d = primaryDet(hit), why = (d.notes || []).filter(function (n) { return !/^\d{4}-/.test(n); });
+      return { tyyppi: 'luottamus', luottamus: hit.conf, teksti: 'Tapahtuman ' + fi(hit.start) + '–' + fi(hit.end) + ' luottamus ' + fmtNum(hit.conf) + ' jäi alle rajan ' + Number(p.confMin).toFixed(2).replace('.', ',') + (why.length ? '. Luottamusta alensi: ' + why.join('; ') : '') + '.' };
+    }
+    var rj = base.rejected.filter(function (r) { return overlap(r, ev); })[0];
+    if (rj) return { tyyppi: 'hylätty', teksti: 'Pudotus ' + fi(rj.start) + '–' + fi(rj.end) + ' hylättiin: ' + rj.reason + '.' };
+    var ex = base.excluded.filter(function (x) { return x.obs.date >= ev.start && x.obs.date <= ev.end; });
+    if (ex.length) return { tyyppi: 'pois jätetty', teksti: 'Havainto ' + fi(ex[0].obs.date) + ' (' + ex[0].obs.src + ') jätettiin pois: ' + ex[0].reason + '.' };
+    return { tyyppi: 'kynnys', teksti: 'NDVI:n pudotus jäi alle kynnyksen ' + fmtNum(p.ndviDrop) + '.' };
+  }
+
+  function sensitivity(obs, opts) {
+    var p = Object.assign({}, DEFAULTS, opts || {});
+    var base = analyze(obs, p);
+    var top = base.events.slice().sort(function (a, b) { return b.conf - a.conf; })[0] || null;
+    var out = { needed: !okResult(base), confMin: p.confMin, top: top ? { start: top.start, end: top.end, conf: top.conf } : null, results: [], tried: 0, near: false };
+    if (!out.needed) return out;
+    var cands = LOOSEN.filter(function (c) { return looser(c, p) && (!c.onlyFail || base.verdict.level === 'fail'); });
+    var run = function (set) {
+      var q = Object.assign({}, p); set.forEach(function (c) { q[c.k] = c.to; });
+      out.tried++;
+      var r = analyze(obs, q);
+      return okResult(r) ? r : null;
+    };
+    var record = function (set, r) {
+      var b = r.best, worst = set.map(function (c) { return c.grade; }).sort(function (x, y) { return gradeRank(y) - gradeRank(x); })[0];
+      out.results.push({
+        changes: set.map(function (c) { return { k: c.k, label: c.label, from: p[c.k], to: c.to, grade: c.grade, why: c.why }; }),
+        grade: worst, verdict: r.verdict, start: b.start, end: b.end, conf: b.conf, fams: b.fams, blocker: blocker(base, b, p, set)
+      });
+    };
+    var solo = {};
+    cands.forEach(function (c) { var r = run([c]); if (r) { solo[c.k] = true; record([c], r); } });
+    // Kahden löysennyksen yhdistelmät vain, jos kumpikaan ei yksin riitä; ei perusteltuja ei yhdistetä.
+    var pool = cands.filter(function (c) { return c.grade !== 'ei perusteltu' && !solo[c.k]; });
+    for (var i = 0; i < pool.length; i++) for (var j = i + 1; j < pool.length; j++) {
+      var r2 = run([pool[i], pool[j]]); if (r2) record([pool[i], pool[j]], r2);
+    }
+    out.results.sort(function (a, b) {
+      return gradeRank(a.grade) - gradeRank(b.grade) || a.changes.length - b.changes.length || b.conf - a.conf;
+    });
+    // Lähellä rajaa: tapahtuma on enintään 0,15 rajan alla tai tukiehto kaatuu, tai tulos kääntyy
+    // vähintään kohtalaisesti perustellulla löysennyksellä.
+    out.near = (top && top.conf >= p.confMin - 0.15) || base.verdict.level === 'fail' ||
+      out.results.some(function (r) { return gradeRank(r.grade) <= 1; });
+    return out;
+  }
+
+  var api = { VERSION: VERSION, FAMILY: FAMILY, SOURCES: SOURCES, RULES: RULES, DEFAULTS: DEFAULTS, analyze: analyze, sensitivity: sensitivity, LOOSEN: LOOSEN, reportText: reportText, fi: fi, compareSources: compareSources, SCENARIOS: SCENARIOS,
     monitor: monitor, monitorCompare: monitorCompare, fuse: fuse, MON_SCENARIOS: MON_SCENARIOS, isRadar: isRadar, _trendDetect: function (s, f, o) { return trendDetect(s, f, Object.assign({}, DEFAULTS, o || {})); },
     _s1bDetect: function (s, o) { return s1bDetect(s, Object.assign({}, DEFAULTS, o || {})); }, _coverage: function (d, a, b, o) { return coverage(d, a, b, Object.assign({}, DEFAULTS, o || {})); } };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

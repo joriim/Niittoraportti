@@ -163,6 +163,70 @@
   function mainObs(obs){ var f=C.fuse(obs,readP()); fuseInfo=f.info; return f.obs }
   function factFrom(checks,re){return checks.filter(function(c){return re.test(c.t)})[0]||null}
 
+  // ---------- Lähellä todennäköisyysrajaa: herkkyysanalyysi ----------
+  var UNIT={persistWindow:' vrk',maxGap:' vrk',minValid:' %',minChanged:' %'};
+  var GRADE_CLS={'perusteltu':'g-ok','kohtalainen':'g-mid','heikko':'g-weak','ei perusteltu':'g-no'};
+  function pv(k,v){return fx(+v,k==='ndviDrop'?2:k==='confMin'?2:k==='s1k'?1:0).replace(/,0+$/,'')+(UNIT[k]||'')}
+  // Asetukset, jotka poikkeavat oletuksista; löysennyksille liitetään perusteltavuus ja perustelu.
+  var LOWER_K={confMin:1,minValid:1,s1k:1,minChanged:1,ndviDrop:1};
+  // Raja, jonka yli löysennys on perustelematon (ks. core.LOOSEN: perustelut koskevat arvoja oletuksen ja to:n välillä).
+  var FAR={persistWindow:21,confMin:0.45,minValid:25,minChanged:70,ndviDrop:0.08,s1k:3,maxGap:60};
+  function changedParams(p){
+    return PKEYS.filter(function(k){return p[k]!=null&&+p[k]!==+C.DEFAULTS[k]}).map(function(k){
+      var c=C.LOOSEN.filter(function(x){return x.k===k})[0], v=+p[k], lo=LOWER_K[k];
+      var tighter=lo?v>+C.DEFAULTS[k]:v<+C.DEFAULTS[k], g='tiukennus';
+      if(!tighter){
+        var beyond=lo?v<c.to:v>c.to, far=lo?v<FAR[k]:v>FAR[k];
+        g=!beyond?c.grade:far?'ei perusteltu':'heikko';
+      }
+      return {k:k,label:c.label,from:C.DEFAULTS[k],to:v,grade:g,why:tighter?null:c.why};
+    });
+  }
+  var sensCache=null;
+  function renderNear(obs,p,res){
+    var el=$('nearBox'), h='';
+    sensCache=null;
+    if(!res){el.hidden=true;el.innerHTML='';return}
+    var ok=!!(res.best&&res.verdict.level!=='fail'), ch=changedParams(p);
+    if(ok&&ch.length){
+      h='<strong>Tulos perustuu oletuksista poikkeaviin asetuksiin.</strong><ul class="small">'+ch.map(function(c){
+        return '<li>'+esc(c.label)+' '+pv(c.k,c.from)+' → '+pv(c.k,c.to)+(c.grade&&c.grade!=='tiukennus'?' <span class="grade '+GRADE_CLS[c.grade]+'">'+esc(c.grade)+'</span>':'')+(c.why?'<div class="muted">'+esc(c.why)+'</div>':'')+'</li>'}).join('')+
+        '</ul><p class="small muted" style="margin:0 0 8px">Asetukset kirjataan raporttiin ja Vipu-tekstiin. Kirjaa löysennyksen syy myös omiin muistiinpanoihisi.</p><button class="btn sm" type="button" data-near-reset>Palauta oletukset</button>';
+      el.className='nearbox applied'; el.innerHTML=h; el.hidden=false; return;
+    }
+    if(ok){el.hidden=true;el.innerHTML='';return}
+    var sv=C.sensitivity(obs,p);
+    if(!sv.near&&!sv.results.length){el.hidden=true;el.innerHTML='';return}
+    sensCache=sv;
+    var top=sv.top;
+    h='<strong>'+(sv.near?'Lähellä todennäköisyysrajaa.':'Niittoa ei tunnistettu oletusasetuksilla.')+'</strong> '+
+      (res.verdict.level==='fail'?'Niitto tunnistettiin, mutta tukiehto ei täyty. ':top?'Varmin tapahtuma '+C.fi(top.start)+'–'+C.fi(top.end)+' sai luottamuksen '+fx(top.conf,2)+', kun raja on '+fx(sv.confMin,2)+'. ':'');
+    if(sv.results.length){
+      h+='Alla on asetukset, joiden löysentäminen muuttaisi tuloksen, perustelluimmat ensin.'+
+        (sv.results[0].blocker?'<p class="small" style="margin:8px 0 0"><strong>Este:</strong> '+esc(sv.results[0].blocker.teksti)+'</p>':'')+
+        '<div class="tablewrap"><table class="small neart"><thead><tr><th>Löysennys</th><th>Perusteltavuus</th><th>Tulos</th><th><span class="sr">Kokeile</span></th></tr></thead><tbody>'+
+        sv.results.map(function(r,i){
+          return '<tr><td>'+r.changes.map(function(c){return esc(c.label)+' '+pv(c.k,c.from)+' → '+pv(c.k,c.to)}).join('<br>+ ')+
+            '<details><summary class="muted">perustelu</summary>'+r.changes.map(function(c){return '<p class="muted" style="margin:4px 0">'+esc(c.why)+'</p>'}).join('')+'</details></td>'+
+            '<td><span class="grade '+GRADE_CLS[r.grade]+'">'+esc(r.grade)+'</span></td>'+
+            '<td>'+esc(r.verdict.label)+'<div class="muted">'+fiShort(r.start)+'–'+fiShort(r.end)+' · luottamus '+fx(r.conf,2)+'</div></td>'+
+            '<td><button class="btn sm" type="button" data-near-apply="'+i+'"'+(r.grade==='ei perusteltu'?' disabled title="Ei perusteltu: korjaa katve lisälähteellä"':'')+'>Kokeile</button></td></tr>'}).join('')+
+        '</tbody></table></div><p class="small muted" style="margin:8px 0 0">Kokeile vaihtaa asetuksen lisäasetuksiin. Tulos ja Vipu-teksti lasketaan uudelleen, ja muutos kirjataan raporttiin. Tarkista ennen käyttöä kuvasarjasta, että lohko näkyy pudotuksen molemmin puolin ilman pilveä.</p>';
+    }else{
+      h+='Niittoa ei tunnistettaisi yhdenkään asetuksen löysennyksellä eikä kahden perustellun löysennyksen yhdistelmällä ('+sv.tried+' kokeilua). Lisää lähde (PlanetScope tai Sentinel-1) tai ota kuva Vipu-mobiililla.';
+    }
+    el.className='nearbox'; el.innerHTML=h; el.hidden=false;
+  }
+  $('nearBox').addEventListener('click',function(e){
+    var t=e.target;
+    if(t.hasAttribute('data-near-reset')){resetP();return}
+    var i=t.getAttribute('data-near-apply'); if(i==null||!sensCache) return;
+    var r=sensCache.results[+i]; if(!r) return;
+    r.changes.forEach(function(c){$('p_'+c.k).value=c.to});
+    render();
+    $('resCard').scrollIntoView({behavior:'smooth',block:'start'});
+  });
+
   function render(){
     var obsAll=readObs(), obs=mainObs(obsAll), p=readP(), muu=measureSel.isMuu();
     seq.set(visibleFrames(obsAll));
@@ -191,15 +255,20 @@
     if(obs.filter(function(o){return o.value!=null&&!isNaN(o.value)}).length<2){
       v.className='muted';v.textContent='Lisää vähintään kaksi saman lähteen havaintoa.';
       ck.innerHTML='';ev.innerHTML='';facts.innerHTML='';bwEl.innerHTML='';out.value='';svg.innerHTML='';$('legend').innerHTML='';
-      setMeter(null);renderRvMini(null);current=null;$('techSum').textContent='tarkistukset, tapahtumat ja havaintotaulukko';
+      setMeter(null);renderRvMini(null);renderNear(null,null,null);current=null;$('techSum').textContent='tarkistukset, tapahtumat ja havaintotaulukko';
       $('outEmpty').textContent='Teksti muodostuu, kun havainnot on haettu.';setLen();return;
     }
     var res=C.analyze(obs,p);
+    renderNear(obs,p,res);
     current={ohjelma:'Niittoraportti',versio:res.version,laadittu:new Date().toISOString().slice(0,10),lohko:lohko,toimenpide:p.measure,
       tulos:res.verdict,parametrit:res.params,tapahtumat:res.events.map(slimEv),hylatyt_pudotukset:res.rejected.map(function(r){return {lahde:r.fam,alku:r.start,loppu:r.end,pudotus:r.drop,syy:r.reason}}),
       pois_jatetyt_havainnot:res.excluded.map(function(x){return {havainto:x.obs,syy:x.reason}}),havainnot:res.used.map(function(o){return {paiva:o.date,lahde:o.src,tunniste:o.id,arvo:o.value,kelvolliset:o.valid,muuttunut:o.changed}}),
       lahteet:['De Vroey ym. 2022, doi:10.1016/j.rse.2022.113145','Claverie ym. 2018, doi:10.1016/j.rse.2018.09.002','Tamm ym. 2016, doi:10.3390/rs8100802','Kolecka ym. 2018, doi:10.3390/rs10081221','Ruokavirasto, peltovalvontaohje 2026']};
     if(cmpCache) current.lahdevertailu=cmpCache;
+    var chP=changedParams(p);
+    if(chP.length) current.poikkeavat_asetukset=chP.map(function(c){return {asetus:c.k,nimi:c.label,oletus:c.from,kaytetty:c.to,perusteltavuus:c.grade,perustelu:c.why}});
+    if(sensCache) current.herkkyysanalyysi={lahin_tapahtuma:sensCache.top,todennakoisyysraja:sensCache.confMin,kokeiltu:sensCache.tried,
+      loysennykset:sensCache.results.map(function(r){return {muutokset:r.changes.map(function(c){return {asetus:c.k,oletus:c.from,uusi:c.to,perusteltavuus:c.grade}}),perusteltavuus:r.grade,tulos:r.verdict.label,niittovali:[r.start,r.end],luottamus:r.conf,este:r.blocker&&r.blocker.teksti}})};
     if(monCache) current.seuranta=monCache;
     if(fuseInfo&&fuseInfo.mode==='HLS + L2A') current.yhdistaminen={hls_l2a:true,l2a_taydennyksia:fuseInfo.filled,maskiristiriitoja:fuseInfo.conflicts};
     var vd=res.verdict, b=res.best;
@@ -245,6 +314,7 @@
       var src=[];
       if(parcelInfo.vuosi) src.push('Rajaus: Ruokaviraston kasvulohkoaineisto '+parcelInfo.vuosi+(parcelInfo.kasvi?' (kasvi '+parcelInfo.kasvi+')':'')+'.');
       if(cs.conflict&&cs.confirmed) src.push('Toimenpide '+p.measure+' viljelijän ilmoituksen mukaan.');
+      if(chP.length) src.push('Oletuksista poikkeavat asetukset: '+chP.map(function(c){return c.label.toLowerCase()+' '+pv(c.k,c.to)+(c.grade&&c.grade!=='tiukennus'?' ('+c.grade+')':'')}).join(', ')+'.');
       txt=txt+(src.length?' '+src.join(' '):'');
     }
     out.value=txt;

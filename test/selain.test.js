@@ -255,6 +255,32 @@ const item = (id, c, d, p, nir, e) => ({ id, collection: c, properties: { dateti
   assert.ok(!overflow, 'ei vaakavieritystä puhelinleveydellä');
   await page.screenshot({ path: path.join(process.env.SHOT_DIR || require('os').tmpdir(), 'selain_mobiili.png'), fullPage: false });
   console.log('ok ohjeet avautuvat ja asettelu toimii 390 px leveydellä');
+  // Lähellä todennäköisyysrajaa: herkkyysanalyysi ja löysennyksen kokeilu
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.click('#stepNav button[data-step="3"]');
+  await page.$eval('#tech', (d) => { d.open = true; });
+  await page.$eval('#csvBox', (d) => { d.open = true; });
+  await page.click('#clear');
+  await page.fill('#csv', ['2026-06-20;HLS-S30;a;0.80;100', '2026-07-01;HLS-S30;b;0.82;100', '2026-07-08;HLS-S30;c;0.61;100;95', '2026-07-21;HLS-S30;d;0.58;100',
+    '2026-08-20;HLS-S30;e;0.70;100', '2026-09-20;HLS-S30;f;0.62;100', '2026-09-25;HLS-S30;g;0.61;100'].join('\n'));
+  await page.click('#importCsv');
+  assert.match(await page.textContent('#verdict'), /Niittoa ei tunnistettu/);
+  assert.ok(await page.isVisible('#nearBox'));
+  const nb = await page.textContent('#nearBox');
+  assert.match(nb, /Lähellä todennäköisyysrajaa\.\s*Varmin tapahtuma 1\.7\.2026–8\.7\.2026 sai luottamuksen 0,58, kun raja on 0,60/);
+  assert.match(nb, /Este:.*pysyvyyttä ei voitu varmistaa/);
+  const rowsN = await page.$$eval('#nearBox tbody tr', (trs) => trs.map((tr) => tr.children[0].firstChild.textContent + ' | ' + tr.children[1].textContent));
+  assert.deepStrictEqual(rowsN, ['Pysyvyysikkuna 10 vrk → 14 vrk | perusteltu', 'Todennäköisyysraja 0,60 → 0,50 | kohtalainen', 'NDVI-pudotus 0,12 → 0,10 | heikko']);
+  await (await page.$('#resCard')).screenshot({ path: path.join(process.env.SHOT_DIR || require('os').tmpdir(), 'selain_lahella.png') });
+  await page.click('#nearBox [data-near-apply="0"]');
+  assert.strictEqual(await page.inputValue('#p_persistWindow'), '14');
+  assert.match(await page.textContent('#verdict'), /näyttö niitosta/);
+  assert.match(await page.textContent('#nearBox'), /Tulos perustuu oletuksista poikkeaviin asetuksiin\.\s*Pysyvyysikkuna 10 vrk → 14 vrk perusteltu/);
+  assert.match(await page.inputValue('#out'), /Oletuksista poikkeavat asetukset: pysyvyysikkuna 14 vrk \(perusteltu\)\./);
+  await page.click('#nearBox [data-near-reset]');
+  assert.strictEqual(await page.inputValue('#p_persistWindow'), '10');
+  assert.match(await page.textContent('#verdict'), /Niittoa ei tunnistettu/);
+  console.log('ok lähellä todennäköisyysrajaa: löysennykset, kokeilu ja palautus');
   assert.deepStrictEqual(errors, []);
   await browser.close(); server.close();
   console.log('selaintesti läpi');

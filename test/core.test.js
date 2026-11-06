@@ -381,4 +381,57 @@ t('lähdevertailu: Sentinel-1 omana rivinä ja optisten lähteiden täydentäjä
   // ilman tutkaa S1-rivejä ei ole
   assert.ok(!C.compareSources(s2mow.concat(ps), {}).rows.some((x) => x.radar));
 });
+const nearObs = [
+  { date: '2026-06-20', src: 'HLS-S30', id: 'a', value: 0.80, valid: 100 },
+  { date: '2026-07-01', src: 'HLS-S30', id: 'b', value: 0.82, valid: 100 },
+  { date: '2026-07-08', src: 'HLS-S30', id: 'c', value: 0.61, valid: 100, changed: 95 },
+  { date: '2026-07-21', src: 'HLS-S30', id: 'd', value: 0.58, valid: 100 },
+  { date: '2026-08-20', src: 'HLS-S30', id: 'e', value: 0.70, valid: 100 },
+  { date: '2026-09-20', src: 'HLS-S30', id: 'f', value: 0.62, valid: 100 },
+  { date: '2026-09-25', src: 'HLS-S30', id: 'g', value: 0.61, valid: 100 },
+];
+
+t('herkkyysanalyysi: lähellä rajaa, perusteltu löysennys ensin ja este nimetty', () => {
+  const base = C.analyze(nearObs, { measure: 'Luonnonhoitonurmi' });
+  assert.strictEqual(base.verdict.level, 'none');
+  assert.strictEqual(base.events[0].conf, 0.58);
+  const s = C.sensitivity(nearObs, { measure: 'Luonnonhoitonurmi' });
+  assert.ok(s.needed && s.near);
+  assert.deepStrictEqual(s.top, { start: '2026-07-01', end: '2026-07-08', conf: 0.58 });
+  assert.deepStrictEqual(s.results.map((r) => r.changes.map((c) => c.k).join('+')), ['persistWindow', 'confMin', 'ndviDrop']);
+  assert.deepStrictEqual(s.results.map((r) => r.grade), ['perusteltu', 'kohtalainen', 'heikko']);
+  const r0 = s.results[0];
+  assert.strictEqual(r0.changes[0].from, 10); assert.strictEqual(r0.changes[0].to, 14);
+  assert.strictEqual(r0.start, '2026-07-01'); assert.strictEqual(r0.end, '2026-07-08');
+  assert.ok(r0.conf >= 0.6);
+  assert.strictEqual(r0.blocker.tyyppi, 'luottamus');
+  assert.match(r0.blocker.teksti, /0,58 jäi alle rajan 0,60.*pysyvyyttä ei voitu varmistaa/);
+  // Perusteltu löysennys todella kääntää tuloksen
+  assert.ok(C.analyze(nearObs, { measure: 'Luonnonhoitonurmi', persistWindow: 14 }).best);
+});
+
+t('herkkyysanalyysi: ei tarvita, kun niitto tunnistetaan; jo löysennettyä ei kokeilla uudelleen', () => {
+  assert.strictEqual(C.sensitivity(mow, { measure: 'Luonnonhoitonurmi' }).needed, false);
+  const s = C.sensitivity(nearObs, { measure: 'Luonnonhoitonurmi', confMin: 0.65, persistWindow: 21 });
+  assert.ok(!s.results.some((r) => r.changes.some((c) => c.k === 'persistWindow')), 'persistWindow on jo löysempi kuin 14');
+});
+
+t('herkkyysanalyysi: pois jätetty havainto ja kahden löysennyksen yhdistelmä', () => {
+  const obs = [
+    { date: '2026-07-01', src: 'HLS-S30', value: 0.82, valid: 100 },
+    { date: '2026-07-10', src: 'HLS-S30', value: 0.80, valid: 100 },
+    { date: '2026-07-18', src: 'HLS-S30', value: 0.55, valid: 40 },
+    { date: '2026-08-01', src: 'HLS-S30', value: 0.57, valid: 100 },
+  ];
+  const s = C.sensitivity(obs, { measure: 'Luonnonhoitonurmi' });
+  assert.ok(s.results.length, 'löysennys löytyy');
+  const solo = s.results.filter((r) => r.changes.length === 1).map((r) => r.changes[0].k);
+  const pair = s.results.filter((r) => r.changes.length === 2);
+  assert.ok(solo.includes('minValid') || pair.some((r) => r.changes.some((c) => c.k === 'minValid')), 'kelvollisten rajan löysennys mukana');
+  const withMv = s.results.find((r) => r.changes.some((c) => c.k === 'minValid'));
+  assert.strictEqual(withMv.blocker.tyyppi, 'pois jätetty');
+  assert.match(withMv.blocker.teksti, /18\.7\.2026.*40 % < 50 %/);
+  assert.ok(s.results.every((r, i, a) => !i || ['perusteltu', 'kohtalainen', 'heikko', 'ei perusteltu'].indexOf(a[i - 1].grade) <= ['perusteltu', 'kohtalainen', 'heikko', 'ei perusteltu'].indexOf(r.grade)), 'järjestys perusteltavuuden mukaan');
+});
+
 console.log('lähdevertailun tutkatestit läpi');

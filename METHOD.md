@@ -127,6 +127,22 @@ Arvio tehdään varmimmasta hyväksytystä tapahtumasta.
 
 Huomautuksiksi lasketaan vain päätunnistuksen (varmimman optisen, muuten tutkan) ja tukiehdon huomautukset. Tukihavaintojen huomautukset näytetään tietona, jotta lisälähde ei heikennä tapahtumaa, jonka vahvempi lähde jo vahvistaa.
 
+### Lähellä todennäköisyysrajaa: herkkyysanalyysi (`core.sensitivity`)
+
+Kun niittoa ei tunnisteta tai tukiehto kaatuu muuttuneeseen osuuteen, tunnistus ajetaan uudelleen niin, että yksi asetus kerrallaan on löysennetty. Jos mikään yksittäinen löysennys ei käännä tulosta, kokeillaan kahden löysennyksen yhdistelmiä. Yhdistelmissä ei käytetä perustelemattomia löysennyksiä. Tulos näytetään, jos varmin tapahtuma jää enintään 0,15 rajan alle, tukiehto kaatuu tai tulos kääntyy vähintään kohtalaisesti perustellulla löysennyksellä.
+
+| Asetus | Oletus → löysennys | Perusteltavuus | Peruste |
+| --- | --- | --- | --- |
+| Pysyvyysikkuna | 10 → 14 vrk | perusteltu | Nurmen jälkikasvu näkyy NDVI:ssä 2–4 viikossa. Ikkuna antaa pysyvyydelle tarkistuskuvan, mutta palautuva pudotus hylätään edelleen. |
+| Todennäköisyysraja | 0,60 → 0,50 | kohtalainen | Sen4CAP antaa kynnyksen ylittävälle optiselle pudotukselle luottamuksen vähintään 0,5 [De Vroey 2022]. 0,6 on tämän sovelluksen oma lisävarmistus. |
+| Kelvolliset pikselit | 50 → 35 % | kohtalainen | Mediaani näkyvästä osasta edustaa kasvustoa, kun näkyvissä on noin kolmannes lohkosta. Näyttö koskee vain näkyvää osaa. |
+| S1-kynnys kσ | 5,0 → 4,0 | kohtalainen | Väärän hälytyksen todennäköisyys on noin 3·10⁻⁵ kuvausta kohden. |
+| Muuttunut osuus | 90 → 80 % | kohtalainen | Ojien, pientareiden ja varjojen sekapikselit. Kokeillaan vain, kun tukiehto kaatuu. |
+| NDVI-pudotus | 0,12 → 0,10 | heikko | Kirjallisuuden pohjoinen kynnys on 0,12. Pienempi kynnys löytää myös kuivuuden, tuleentumisen ja usvan. |
+| Suurin havaintoväli | 60 → 75 vrk | ei perusteltu | Niittoa ei voi ajoittaa. Katve korjataan lisälähteellä. |
+
+Jokaisesta tulosta kääntävästä löysennyksestä raportoidaan este, joka perustasolla esti tunnistuksen: alle rajan jäänyt luottamus heikentäjineen, hylätty pudotus, pois jätetty havainto tai kynnyksen alle jäänyt pudotus. Analyysi ei muuta tulosta. Neuvoja voi ottaa löysennyksen käyttöön (*Kokeile*), ja silloin oletuksista poikkeavat asetukset ja niiden perusteltavuus kirjataan JSON-raporttiin (`poikkeavat_asetukset`) ja Vipu-tekstiin. Herkkyysanalyysi tallentuu raporttiin kenttään `herkkyysanalyysi`.
+
 ### Tukiehtojen päivämäärät (peltovalvontaohje 2026 [R4])
 
 | Toimenpide | Aikaisintaan | Viimeistään |

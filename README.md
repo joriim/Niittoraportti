@@ -137,3 +137,7 @@ Haun jälkeen tuloskortissa on *Kuvasarja*. Siinä näkyvät lohkon NDVI-kuvat (
 *Lataa kaikki kuvat* tekee ZIP-paketin, jossa on jokaisesta kuvasta PNG ja world file (.pgw), kuvaluettelo `kuvat.csv` (päivä, lähde, tunniste, NDVI-mediaani, kelvolliset %, EPSG) ja `LUEMINUT.txt`.
 
 Ladattavat tiedostot nimetään muotoon `mittausväli_niittoraportti_lohkonumero`, esim. `20250501_251015_niittoraportti_1641431471-2.json` ja `20250501_251015_niittoraportti_1641431471-2_kuvat.zip`. Mittausväli on hakujakson alku (VVVVKKPP) ja loppu (VVKKPP).
+
+## Lähellä todennäköisyysrajaa
+
+Jos niittoa ei tunnisteta, mutta varmin tapahtuma jää lähelle todennäköisyysrajaa, tuloskortti näyttää, minkä lisäasetuksen löysentäminen muuttaisi tuloksen. Löysennykset järjestetään perusteltavuuden mukaan (perusteltu, kohtalainen, heikko, ei perusteltu), ja jokaiselle näytetään perustelu ja este, joka perustasolla esti tunnistuksen. *Kokeile* ottaa löysennyksen käyttöön. Oletuksista poikkeavat asetukset kirjataan raporttiin ja Vipu-tekstiin. Menetelmä on kuvattu tiedostossa `METHOD.md`.
